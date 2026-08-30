@@ -125,6 +125,33 @@ const publicSourceSchema = z
   })
   .strict();
 
+const publicEventEntitySchema = z
+  .object({
+    publicId: publicIdSchema,
+    type: z.enum([
+      "model",
+      "paper",
+      "product",
+      "repository",
+      "prompt",
+      "skill",
+      "guide",
+      "organization",
+      "person",
+      "benchmark",
+      "topic",
+    ]),
+    name: z.string().min(1),
+    relationPublicId: publicIdSchema,
+    predicate: z.enum([
+      "ANNOUNCES",
+      "UPDATES",
+      "CHANGES_PRICE_OF",
+      "DEPRECATES",
+    ]),
+  })
+  .strict();
+
 export const publicEventSchema = z
   .object({
     publicId: publicIdSchema,
@@ -155,6 +182,7 @@ export const publicEventSchema = z
       })
       .strict(),
     sources: z.array(publicSourceSchema).min(1),
+    entities: z.array(publicEventEntitySchema),
   })
   .strict();
 

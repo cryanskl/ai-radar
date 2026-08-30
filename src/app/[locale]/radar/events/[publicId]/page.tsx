@@ -22,6 +22,7 @@ const copy = {
     sourceRights: "Source rights",
     attribution: "Attribution",
     license: "License",
+    entities: "Related entities",
   },
   zh: {
     occurred: "发生时间",
@@ -35,6 +36,7 @@ const copy = {
     sourceRights: "来源权利",
     attribution: "署名",
     license: "许可",
+    entities: "关联实体",
   },
 } as const;
 
@@ -117,6 +119,21 @@ export default async function EventDetailPage({
           {reviewLabels[locale][event.localization.reviewStatus]}
         </p>
       </section>
+      {event.entities.length > 0 ? (
+        <section>
+          <h2>{labels.entities}</h2>
+          <ul>
+            {event.entities.map((entity) => (
+              <li key={entity.relationPublicId}>
+                {entity.predicate} ·{" "}
+                <a href={`/${locale}/entities/${entity.publicId}`}>
+                  {entity.name}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <section>
         <h2>{labels.sources}</h2>
         {event.sources.map((source) => (

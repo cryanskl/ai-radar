@@ -4,10 +4,14 @@ import {
   eventPublicationAudits,
   eventSources,
   events,
+  entities,
+  entityLocalizedContents,
   inboxItems,
   localizedContents,
   sourceItems,
   sources,
+  relationEvidence,
+  relations,
 } from "@/db/schema";
 import { publicRightsStatusSchema, type EventDraftRequest } from "./contracts";
 import type { InboxEventDraftRequest } from "@/ingestion/contracts";
@@ -418,6 +422,13 @@ const mapPublicEvents = (
         attribution: string;
         licenseUrl: string | null;
       }>;
+      entities: Array<{
+        publicId: string;
+        type: (typeof entities.$inferSelect)["type"];
+        name: string;
+        relationPublicId: string;
+        predicate: "ANNOUNCES" | "UPDATES" | "CHANGES_PRICE_OF" | "DEPRECATES";
+      }>;
     }
   >();
 
@@ -442,6 +453,7 @@ const mapPublicEvents = (
           reviewStatus: "reviewed",
         },
         sources: [],
+        entities: [],
       };
       mapped.set(row.id, event);
     }
@@ -463,8 +475,83 @@ const mapPublicEvents = (
   return [...mapped.values()];
 };
 
+const attachPublicEntities = async (
+  mappedEvents: ReturnType<typeof mapPublicEvents>,
+  locale: "en" | "zh",
+) => {
+  if (mappedEvents.length === 0) return mappedEvents;
+  const rows = await database
+    .select({
+      eventPublicId: events.publicId,
+      entityPublicId: entities.publicId,
+      entityType: entities.type,
+      entityName: entityLocalizedContents.name,
+      relationPublicId: relations.publicId,
+      predicate: relations.predicate,
+    })
+    .from(relations)
+    .innerJoin(events, eq(events.id, relations.subjectEventId))
+    .innerJoin(entities, eq(entities.id, relations.objectEntityId))
+    .innerJoin(
+      entityLocalizedContents,
+      and(
+        eq(entityLocalizedContents.entityId, entities.id),
+        eq(entityLocalizedContents.locale, locale),
+      ),
+    )
+    .innerJoin(relationEvidence, eq(relationEvidence.relationId, relations.id))
+    .innerJoin(sourceItems, eq(sourceItems.id, relationEvidence.sourceItemId))
+    .where(
+      and(
+        inArray(
+          events.publicId,
+          mappedEvents.map(({ publicId }) => publicId),
+        ),
+        eq(relations.publicVisibility, true),
+        eq(relations.reviewStatus, "reviewed"),
+        eq(entities.publicVisibility, true),
+        eq(entityLocalizedContents.publicVisibility, true),
+        eq(sourceItems.publicVisibility, true),
+      ),
+    );
+  const eventByPublicId = new Map(
+    mappedEvents.map((event) => [event.publicId, event]),
+  );
+  const linkedRelations = new Set<string>();
+  for (const row of rows) {
+    if (
+      linkedRelations.has(row.relationPublicId) ||
+      !["ANNOUNCES", "UPDATES", "CHANGES_PRICE_OF", "DEPRECATES"].includes(
+        row.predicate,
+      )
+    ) {
+      continue;
+    }
+    const event = eventByPublicId.get(row.eventPublicId);
+    if (!event) continue;
+    linkedRelations.add(row.relationPublicId);
+    event.entities.push({
+      publicId: row.entityPublicId,
+      type: row.entityType,
+      name: row.entityName,
+      relationPublicId: row.relationPublicId,
+      predicate: row.predicate as
+        "ANNOUNCES" | "UPDATES" | "CHANGES_PRICE_OF" | "DEPRECATES",
+    });
+  }
+  return mappedEvents;
+};
+
 export const listPublicEvents = async (locale: "en" | "zh") =>
-  mapPublicEvents(await selectPublicEventRows(locale));
+  attachPublicEntities(
+    mapPublicEvents(await selectPublicEventRows(locale)),
+    locale,
+  );
 
 export const getPublicEvent = async (publicId: string, locale: "en" | "zh") =>
-  mapPublicEvents(await selectPublicEventRows(locale, publicId))[0] ?? null;
+  (
+    await attachPublicEntities(
+      mapPublicEvents(await selectPublicEventRows(locale, publicId)),
+      locale,
+    )
+  )[0] ?? null;
