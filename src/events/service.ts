@@ -13,8 +13,13 @@ import {
   relationEvidence,
   relations,
 } from "@/db/schema";
+import { eventEvidenceConfidence } from "./representative-source";
 import { publicRightsStatusSchema, type EventDraftRequest } from "./contracts";
 import type { InboxEventDraftRequest } from "@/ingestion/contracts";
+import {
+  getPublicCorrectionsForEvent,
+  getPublicRightsDecisionsForEvent,
+} from "@/operations/service";
 
 const approvedSourceAccessStatuses = new Set(["approved", "approved_limited"]);
 
@@ -408,6 +413,8 @@ const mapPublicEvents = (
       discoveredAt: string;
       lastVerifiedAt: string;
       rightsStatus: (typeof rows)[number]["rightsStatus"];
+      sourceStatus: "active" | "source_withdrawn";
+      evidenceConfidence: "high" | "medium" | "low";
       localization: {
         locale: (typeof rows)[number]["locale"];
         title: string;
@@ -437,6 +444,10 @@ const mapPublicEvents = (
         relationPublicId: string;
         predicate: "ANNOUNCES" | "UPDATES" | "CHANGES_PRICE_OF" | "DEPRECATES";
       }>;
+      corrections: Awaited<ReturnType<typeof getPublicCorrectionsForEvent>>;
+      rightsDecisions: Awaited<
+        ReturnType<typeof getPublicRightsDecisionsForEvent>
+      >;
     }
   >();
 
@@ -453,6 +464,8 @@ const mapPublicEvents = (
         discoveredAt: row.discoveredAt.toISOString(),
         lastVerifiedAt: row.lastVerifiedAt.toISOString(),
         rightsStatus: row.rightsStatus,
+        sourceStatus: "active" as const,
+        evidenceConfidence: "low" as const,
         localization: {
           locale: row.locale,
           title: row.title,
@@ -462,6 +475,8 @@ const mapPublicEvents = (
         },
         sources: [],
         entities: [],
+        corrections: [],
+        rightsDecisions: [],
       };
       mapped.set(row.id, event);
     }
@@ -482,7 +497,13 @@ const mapPublicEvents = (
     });
   }
 
-  return [...mapped.values()];
+  const publicEvents = [...mapped.values()];
+  for (const event of publicEvents) {
+    event.evidenceConfidence = eventEvidenceConfidence(
+      event.sources.map(({ tier }) => ({ sourceTier: tier })),
+    );
+  }
+  return publicEvents;
 };
 
 const attachPublicEntities = async (
@@ -552,16 +573,42 @@ const attachPublicEntities = async (
   return mappedEvents;
 };
 
-export const listPublicEvents = async (locale: "en" | "zh") =>
-  attachPublicEntities(
-    mapPublicEvents(await selectPublicEventRows(locale)),
-    locale,
+const attachOperationalHistory = async (
+  mappedEvents: ReturnType<typeof mapPublicEvents>,
+) => {
+  await Promise.all(
+    mappedEvents.map(async (event) => {
+      [event.corrections, event.rightsDecisions] = await Promise.all([
+        getPublicCorrectionsForEvent(event.publicId),
+        getPublicRightsDecisionsForEvent(event.publicId),
+      ]);
+      event.sourceStatus = event.rightsDecisions.some(
+        ({ targetType, reasonCode }) =>
+          targetType === "source_item" && reasonCode === "source_withdrawal",
+      )
+        ? "source_withdrawn"
+        : "active";
+    }),
   );
+  return mappedEvents;
+};
 
-export const getPublicEvent = async (publicId: string, locale: "en" | "zh") =>
-  (
-    await attachPublicEntities(
-      mapPublicEvents(await selectPublicEventRows(locale, publicId)),
-      locale,
-    )
-  )[0] ?? null;
+export const listPublicEvents = async (locale: "en" | "zh") => {
+  const events = mapPublicEvents(await selectPublicEventRows(locale));
+  await Promise.all([
+    attachPublicEntities(events, locale),
+    attachOperationalHistory(events),
+  ]);
+  return events;
+};
+
+export const getPublicEvent = async (publicId: string, locale: "en" | "zh") => {
+  const publicEvents = mapPublicEvents(
+    await selectPublicEventRows(locale, publicId),
+  );
+  await Promise.all([
+    attachPublicEntities(publicEvents, locale),
+    attachOperationalHistory(publicEvents),
+  ]);
+  return publicEvents[0] ?? null;
+};

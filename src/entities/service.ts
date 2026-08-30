@@ -15,6 +15,7 @@ import {
 } from "@/db/schema";
 import { publicRightsStatusSchema } from "@/events/contracts";
 import type { EntityCreateRequest, RelationCreateRequest } from "./contracts";
+import { getPublicCorrectionsForEntity } from "@/operations/service";
 
 export const normalizeEntityAlias = (value: string) =>
   value.normalize("NFKC").trim().toLocaleLowerCase();
@@ -152,40 +153,83 @@ const eventPredicateByType = {
 
 export const createRelation = async (input: RelationCreateRequest) =>
   database.transaction(async (transaction) => {
-    const [object] = await transaction
+    const [objectReference] = await transaction
+      .select({ id: entities.id })
+      .from(entities)
+      .where(eq(entities.publicId, input.relation.objectEntityPublicId));
+    if (!objectReference) return { status: "not_found" as const };
+
+    let subjectEntityReference: { id: string } | undefined;
+    let subjectEventReference: { id: string } | undefined;
+    if (input.relation.subject.type === "entity") {
+      [subjectEntityReference] = await transaction
+        .select({ id: entities.id })
+        .from(entities)
+        .where(eq(entities.publicId, input.relation.subject.publicId));
+      if (!subjectEntityReference) return { status: "not_found" as const };
+    } else {
+      [subjectEventReference] = await transaction
+        .select({ id: events.id })
+        .from(events)
+        .where(eq(events.publicId, input.relation.subject.publicId));
+      if (!subjectEventReference) return { status: "not_found" as const };
+    }
+
+    const entityEndpointIds = [
+      ...new Set([
+        objectReference.id,
+        ...(subjectEntityReference ? [subjectEntityReference.id] : []),
+      ]),
+    ].sort((left, right) => left.localeCompare(right));
+    const lockedEntities = await transaction
       .select({
         id: entities.id,
         type: entities.type,
+        lifecycleStatus: entities.lifecycleStatus,
         publicVisibility: entities.publicVisibility,
       })
       .from(entities)
-      .where(eq(entities.publicId, input.relation.objectEntityPublicId));
-    if (!object) return { status: "not_found" as const };
+      .where(inArray(entities.id, entityEndpointIds))
+      .orderBy(entities.id)
+      .for("update");
+    const object = lockedEntities.find(({ id }) => id === objectReference.id);
+    const subjectEntity = subjectEntityReference
+      ? lockedEntities.find(({ id }) => id === subjectEntityReference.id)
+      : undefined;
+    if (
+      !object ||
+      object.lifecycleStatus !== "active" ||
+      !object.publicVisibility ||
+      (subjectEntityReference &&
+        (!subjectEntity ||
+          subjectEntity.lifecycleStatus !== "active" ||
+          !subjectEntity.publicVisibility))
+    ) {
+      return { status: "invalid_relation" as const };
+    }
 
-    let subjectEntity:
-      | {
-          id: string;
-          type: (typeof entities.$inferSelect)["type"];
-          publicVisibility: boolean;
-        }
-      | undefined;
-    let subjectEvent:
-      | {
-          id: string;
-          eventType: (typeof events.$inferSelect)["eventType"];
-          publicVisibility: boolean;
-        }
-      | undefined;
-    if (input.relation.subject.type === "entity") {
-      [subjectEntity] = await transaction
-        .select({
-          id: entities.id,
-          type: entities.type,
-          publicVisibility: entities.publicVisibility,
-        })
-        .from(entities)
-        .where(eq(entities.publicId, input.relation.subject.publicId));
-      if (!subjectEntity) return { status: "not_found" as const };
+    const [subjectEvent] = subjectEventReference
+      ? await transaction
+          .select({
+            id: events.id,
+            eventType: events.eventType,
+            publicationState: events.publicationState,
+            publicVisibility: events.publicVisibility,
+          })
+          .from(events)
+          .where(eq(events.id, subjectEventReference.id))
+          .for("update")
+      : [undefined];
+    if (
+      subjectEventReference &&
+      (!subjectEvent ||
+        subjectEvent.publicationState !== "published" ||
+        !subjectEvent.publicVisibility)
+    ) {
+      return { status: "invalid_relation" as const };
+    }
+
+    if (subjectEntity) {
       const vocabulary = allowedEntityPredicates[input.relation.predicate];
       if (
         !vocabulary.subjects.includes(subjectEntity.type) ||
@@ -194,18 +238,10 @@ export const createRelation = async (input: RelationCreateRequest) =>
         return { status: "invalid_relation" as const };
       }
     } else {
-      [subjectEvent] = await transaction
-        .select({
-          id: events.id,
-          eventType: events.eventType,
-          publicVisibility: events.publicVisibility,
-        })
-        .from(events)
-        .where(eq(events.publicId, input.relation.subject.publicId));
-      if (!subjectEvent) return { status: "not_found" as const };
       if (
+        !subjectEvent ||
         eventPredicateByType[subjectEvent.eventType] !==
-        input.relation.predicate
+          input.relation.predicate
       ) {
         return { status: "invalid_relation" as const };
       }
@@ -228,6 +264,8 @@ export const createRelation = async (input: RelationCreateRequest) =>
               eq(sourceItems.publicVisibility, true),
             ),
           )
+          .orderBy(sourceItems.id)
+          .for("update", { of: sourceItems })
       : await transaction
           .select({ id: sourceItems.id, publicId: sourceItems.publicId })
           .from(sourceItems)
@@ -236,7 +274,9 @@ export const createRelation = async (input: RelationCreateRequest) =>
               inArray(sourceItems.publicId, input.evidenceSourceItemPublicIds),
               eq(sourceItems.publicVisibility, true),
             ),
-          );
+          )
+          .orderBy(sourceItems.id)
+          .for("update");
     if (evidence.length !== input.evidenceSourceItemPublicIds.length) {
       return { status: "invalid_relation" as const };
     }
@@ -351,40 +391,42 @@ export const getPublicEntity = async (
     );
   if (!entity) return null;
 
-  const [aliases, versions, relationRows] = await Promise.all([
-    database
-      .select({
-        publicId: entityAliases.publicId,
-        locale: entityAliases.locale,
-        kind: entityAliases.kind,
-        value: entityAliases.value,
-      })
-      .from(entityAliases)
-      .where(
-        and(
-          eq(entityAliases.entityId, entity.id),
-          eq(entityAliases.publicVisibility, true),
-        ),
-      )
-      .orderBy(entityAliases.locale, entityAliases.kind, entityAliases.value),
-    database
-      .select({
-        publicId: entityVersions.publicId,
-        versionLabel: entityVersions.versionLabel,
-        releasedAt: entityVersions.releasedAt,
-        releasedAtPrecision: entityVersions.releasedAtPrecision,
-        lastVerifiedAt: entityVersions.lastVerifiedAt,
-      })
-      .from(entityVersions)
-      .where(
-        and(
-          eq(entityVersions.entityId, entity.id),
-          eq(entityVersions.publicVisibility, true),
-        ),
-      )
-      .orderBy(entityVersions.releasedAt, entityVersions.publicId),
-    publicRelationRows(entity.id, predicate),
-  ]);
+  const [aliases, versions, relationRows, correctionHistory] =
+    await Promise.all([
+      database
+        .select({
+          publicId: entityAliases.publicId,
+          locale: entityAliases.locale,
+          kind: entityAliases.kind,
+          value: entityAliases.value,
+        })
+        .from(entityAliases)
+        .where(
+          and(
+            eq(entityAliases.entityId, entity.id),
+            eq(entityAliases.publicVisibility, true),
+          ),
+        )
+        .orderBy(entityAliases.locale, entityAliases.kind, entityAliases.value),
+      database
+        .select({
+          publicId: entityVersions.publicId,
+          versionLabel: entityVersions.versionLabel,
+          releasedAt: entityVersions.releasedAt,
+          releasedAtPrecision: entityVersions.releasedAtPrecision,
+          lastVerifiedAt: entityVersions.lastVerifiedAt,
+        })
+        .from(entityVersions)
+        .where(
+          and(
+            eq(entityVersions.entityId, entity.id),
+            eq(entityVersions.publicVisibility, true),
+          ),
+        )
+        .orderBy(entityVersions.releasedAt, entityVersions.publicId),
+      publicRelationRows(entity.id, predicate),
+      getPublicCorrectionsForEntity(entity.id),
+    ]);
 
   const entityIds = [
     ...new Set(
@@ -651,6 +693,7 @@ export const getPublicEntity = async (
       edges: graphEdges,
       truncated,
     },
+    corrections: correctionHistory,
   };
 };
 

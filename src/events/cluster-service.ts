@@ -2,7 +2,9 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 import { database } from "@/db/client";
 import {
   entities,
+  corrections,
   eventClusterAudits,
+  eventMergeCorrectionMoves,
   eventMergeRelationMoves,
   eventMerges,
   eventMergeSourceMoves,
@@ -12,9 +14,12 @@ import {
   relations,
   sourceItems,
   sources,
+  tombstones,
 } from "@/db/schema";
+import { getPublicTombstone } from "@/operations/service";
 import { assessEventCandidate } from "./clustering";
 import type { EventMergeRequest, EventSplitRequest } from "./contracts";
+import { selectRepresentativeSource } from "./representative-source";
 
 type SourceLink = {
   eventId: string;
@@ -24,18 +29,8 @@ type SourceLink = {
   sourceTier: "S" | "A" | "B" | "C";
   publishedAt: Date;
   isOriginalSource: boolean;
+  publicVisibility: boolean;
 };
-
-const sourceTierRank = { S: 0, A: 1, B: 2, C: 3 } as const;
-
-const representativeSource = (links: SourceLink[]) =>
-  [...links].sort(
-    (left, right) =>
-      Number(right.isOriginalSource) - Number(left.isOriginalSource) ||
-      sourceTierRank[left.sourceTier] - sourceTierRank[right.sourceTier] ||
-      left.publishedAt.getTime() - right.publishedAt.getTime() ||
-      left.sourceItemPublicId.localeCompare(right.sourceItemPublicId),
-  )[0];
 
 const loadEventMaterials = async (eventIds: string[]) => {
   const [sourceRows, entityRows, localizationRows] = await Promise.all([
@@ -51,11 +46,17 @@ const loadEventMaterials = async (eventIds: string[]) => {
         externalId: sourceItems.externalId,
         externalIdVerifiedAt: sourceItems.externalIdVerifiedAt,
         canonicalUrl: sourceItems.canonicalUrl,
+        publicVisibility: sourceItems.publicVisibility,
       })
       .from(eventSources)
       .innerJoin(sourceItems, eq(sourceItems.id, eventSources.sourceItemId))
       .innerJoin(sources, eq(sources.id, sourceItems.sourceId))
-      .where(inArray(eventSources.eventId, eventIds)),
+      .where(
+        and(
+          inArray(eventSources.eventId, eventIds),
+          eq(sourceItems.publicVisibility, true),
+        ),
+      ),
     database
       .select({
         eventId: relations.subjectEventId,
@@ -68,6 +69,8 @@ const loadEventMaterials = async (eventIds: string[]) => {
         and(
           inArray(relations.subjectEventId, eventIds),
           eq(relations.reviewStatus, "reviewed"),
+          eq(relations.publicVisibility, true),
+          eq(entities.publicVisibility, true),
         ),
       ),
     database
@@ -76,7 +79,12 @@ const loadEventMaterials = async (eventIds: string[]) => {
         locale: localizedContents.locale,
       })
       .from(localizedContents)
-      .where(inArray(localizedContents.eventId, eventIds)),
+      .where(
+        and(
+          inArray(localizedContents.eventId, eventIds),
+          eq(localizedContents.publicVisibility, true),
+        ),
+      ),
   ]);
   const sourcesByEventId = new Map<string, typeof sourceRows>();
   for (const row of sourceRows) {
@@ -163,7 +171,7 @@ export const retrieveEventCandidates = async (publicId: string) => {
           candidateEntityPublicIds: entityPublicIdsFor(candidate.id),
         });
         if (!assessment) return [];
-        const representative = representativeSource([
+        const representative = selectRepresentativeSource([
           ...targetSources,
           ...candidateSources,
         ]);
@@ -245,13 +253,23 @@ export const mergeEvents = async (input: EventMergeRequest) =>
         sourceTier: sources.tier,
         publishedAt: sourceItems.publishedAt,
         isOriginalSource: sourceItems.isOriginalSource,
+        publicVisibility: sourceItems.publicVisibility,
       })
       .from(eventSources)
       .innerJoin(sourceItems, eq(sourceItems.id, eventSources.sourceItemId))
       .innerJoin(sources, eq(sources.id, sourceItems.sourceId))
       .where(inArray(eventSources.eventId, [source.id, target.id]));
     const sourceLinks = links.filter(({ eventId }) => eventId === source.id);
-    const representative = representativeSource(links);
+    const publicLinks = links.filter(
+      ({ publicVisibility }) => publicVisibility,
+    );
+    if (
+      !publicLinks.some(({ eventId }) => eventId === source.id) ||
+      !publicLinks.some(({ eventId }) => eventId === target.id)
+    ) {
+      return { status: "not_mergeable" as const };
+    }
+    const representative = selectRepresentativeSource(publicLinks);
     const [merge] = await transaction
       .insert(eventMerges)
       .values({
@@ -300,6 +318,22 @@ export const mergeEvents = async (input: EventMergeRequest) =>
         .set({ subjectEventId: target.id, updatedAt: new Date() })
         .where(eq(relations.subjectEventId, source.id));
     }
+    const movedCorrections = await transaction
+      .select({ id: corrections.id })
+      .from(corrections)
+      .where(eq(corrections.targetEventId, source.id));
+    if (movedCorrections.length > 0) {
+      await transaction.insert(eventMergeCorrectionMoves).values(
+        movedCorrections.map(({ id }) => ({
+          eventMergeId: merge.id,
+          correctionId: id,
+        })),
+      );
+      await transaction
+        .update(corrections)
+        .set({ targetEventId: target.id })
+        .where(eq(corrections.targetEventId, source.id));
+    }
     const mergedAt = new Date();
     await transaction
       .update(events)
@@ -313,6 +347,15 @@ export const mergeEvents = async (input: EventMergeRequest) =>
       .update(localizedContents)
       .set({ publicVisibility: false, updatedAt: mergedAt })
       .where(eq(localizedContents.eventId, source.id));
+    await transaction.insert(tombstones).values({
+      objectPublicId: source.publicId,
+      objectType: "event",
+      status: "merged_into",
+      publicReasonCode: "duplicate_coverage",
+      replacementPublicId: target.publicId,
+      effectiveAt: mergedAt,
+      eventMergeId: merge.id,
+    });
     await transaction.insert(eventClusterAudits).values({
       action: "merge",
       actorRole: "owner",
@@ -325,8 +368,9 @@ export const mergeEvents = async (input: EventMergeRequest) =>
       status: "merged" as const,
       sourceEventPublicId: source.publicId,
       targetEventPublicId: target.publicId,
-      sourceCount: new Set(links.map(({ sourcePublicId }) => sourcePublicId))
-        .size,
+      sourceCount: new Set(
+        publicLinks.map(({ sourcePublicId }) => sourcePublicId),
+      ).size,
     };
   });
 
@@ -361,6 +405,7 @@ export const previewEventSplit = async (publicId: string) => {
           sourceTier: sources.tier,
           publishedAt: sourceItems.publishedAt,
           isOriginalSource: sourceItems.isOriginalSource,
+          publicVisibility: sourceItems.publicVisibility,
         })
         .from(eventMergeSourceMoves)
         .innerJoin(
@@ -379,6 +424,7 @@ export const previewEventSplit = async (publicId: string) => {
           sourceTier: sources.tier,
           publishedAt: sourceItems.publishedAt,
           isOriginalSource: sourceItems.isOriginalSource,
+          publicVisibility: sourceItems.publicVisibility,
         })
         .from(eventSources)
         .innerJoin(sourceItems, eq(sourceItems.id, eventSources.sourceItemId))
@@ -404,6 +450,18 @@ export const previewEventSplit = async (publicId: string) => {
   const remainingTargetLinks = targetLinks.filter(
     ({ sourceItemId }) => !movedIds.has(sourceItemId),
   );
+  const publicMovedSources = movedSources.filter(
+    ({ publicVisibility }) => publicVisibility,
+  );
+  const publicRemainingTargetLinks = remainingTargetLinks.filter(
+    ({ publicVisibility }) => publicVisibility,
+  );
+  if (
+    publicMovedSources.length === 0 ||
+    publicRemainingTargetLinks.length === 0
+  ) {
+    return { status: "not_splittable" as const };
+  }
   return {
     status: "preview" as const,
     mergedEventPublicId: source.publicId,
@@ -418,9 +476,10 @@ export const previewEventSplit = async (publicId: string) => {
       .map(({ locale }) => locale)
       .sort(),
     restoredRepresentativeSourceItemPublicId:
-      representativeSource(movedSources).sourceItemPublicId,
-    targetRepresentativeSourceItemPublicId:
-      representativeSource(remainingTargetLinks).sourceItemPublicId,
+      selectRepresentativeSource(publicMovedSources).sourceItemPublicId,
+    targetRepresentativeSourceItemPublicId: selectRepresentativeSource(
+      publicRemainingTargetLinks,
+    ).sourceItemPublicId,
     tombstoneStatusAfterSplit: "removed" as const,
   };
 };
@@ -483,6 +542,7 @@ export const splitMergedEvent = async (input: EventSplitRequest) =>
         sourceTier: sources.tier,
         publishedAt: sourceItems.publishedAt,
         isOriginalSource: sourceItems.isOriginalSource,
+        publicVisibility: sourceItems.publicVisibility,
       })
       .from(eventMergeSourceMoves)
       .innerJoin(
@@ -501,6 +561,7 @@ export const splitMergedEvent = async (input: EventSplitRequest) =>
         sourceTier: sources.tier,
         publishedAt: sourceItems.publishedAt,
         isOriginalSource: sourceItems.isOriginalSource,
+        publicVisibility: sourceItems.publicVisibility,
       })
       .from(eventSources)
       .innerJoin(sourceItems, eq(sourceItems.id, eventSources.sourceItemId))
@@ -512,8 +573,23 @@ export const splitMergedEvent = async (input: EventSplitRequest) =>
     const remainingTargetLinks = targetLinks.filter(
       ({ sourceItemId }) => !movedSourceIds.has(sourceItemId),
     );
-    const restoredRepresentative = representativeSource(movedSources);
-    const targetRepresentative = representativeSource(remainingTargetLinks);
+    const publicMovedSources = movedSources.filter(
+      ({ publicVisibility }) => publicVisibility,
+    );
+    const publicRemainingTargetLinks = remainingTargetLinks.filter(
+      ({ publicVisibility }) => publicVisibility,
+    );
+    if (
+      publicMovedSources.length === 0 ||
+      publicRemainingTargetLinks.length === 0
+    ) {
+      return { status: "not_splittable" as const };
+    }
+    const restoredRepresentative =
+      selectRepresentativeSource(publicMovedSources);
+    const targetRepresentative = selectRepresentativeSource(
+      publicRemainingTargetLinks,
+    );
     await transaction
       .update(eventSources)
       .set({ eventId: source.id, isPrimary: false })
@@ -559,6 +635,21 @@ export const splitMergedEvent = async (input: EventSplitRequest) =>
           ),
         );
     }
+    const correctionMoves = await transaction
+      .select({ correctionId: eventMergeCorrectionMoves.correctionId })
+      .from(eventMergeCorrectionMoves)
+      .where(eq(eventMergeCorrectionMoves.eventMergeId, merge.id));
+    if (correctionMoves.length > 0) {
+      await transaction
+        .update(corrections)
+        .set({ targetEventId: source.id })
+        .where(
+          inArray(
+            corrections.id,
+            correctionMoves.map(({ correctionId }) => correctionId),
+          ),
+        );
+    }
     const splitAt = new Date();
     await transaction
       .update(events)
@@ -576,6 +667,10 @@ export const splitMergedEvent = async (input: EventSplitRequest) =>
       .update(eventMerges)
       .set({ status: "split", splitAt })
       .where(eq(eventMerges.id, merge.id));
+    await transaction
+      .update(tombstones)
+      .set({ clearedAt: splitAt })
+      .where(eq(tombstones.eventMergeId, merge.id));
     await transaction.insert(eventClusterAudits).values({
       action: "split",
       actorRole: "owner",
@@ -591,29 +686,5 @@ export const splitMergedEvent = async (input: EventSplitRequest) =>
     };
   });
 
-export const getEventTombstone = async (publicId: string) => {
-  const [row] = await database
-    .select({
-      publicId: events.publicId,
-      targetEventId: eventMerges.targetEventId,
-      reasonCode: eventMerges.publicReasonCode,
-      mergedAt: eventMerges.mergedAt,
-    })
-    .from(eventMerges)
-    .innerJoin(events, eq(events.id, eventMerges.sourceEventId))
-    .where(
-      and(eq(events.publicId, publicId), eq(eventMerges.status, "active")),
-    );
-  if (!row) return null;
-  const [target] = await database
-    .select({ publicId: events.publicId })
-    .from(events)
-    .where(eq(events.id, row.targetEventId));
-  return {
-    publicId: row.publicId,
-    status: "merged_into" as const,
-    targetEventPublicId: target.publicId,
-    reasonCode: row.reasonCode as "duplicate_coverage",
-    mergedAt: row.mergedAt.toISOString(),
-  };
-};
+export const getEventTombstone = (publicId: string) =>
+  getPublicTombstone("event", publicId);

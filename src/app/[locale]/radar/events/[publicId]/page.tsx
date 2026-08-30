@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { localeSchema } from "@/events/contracts";
-import { getEventTombstone } from "@/events/cluster-service";
 import {
   authorshipLabels,
   displayTimestamp,
@@ -9,6 +8,7 @@ import {
   rightsLabels,
 } from "@/events/presentation";
 import { getPublicEvent } from "@/events/service";
+import { getPublicTombstone } from "@/operations/service";
 
 const copy = {
   en: {
@@ -25,10 +25,37 @@ const copy = {
     license: "License",
     entities: "Related entities",
     merged: "Event merged",
+    withdrawn: "Event withdrawn",
+    sourceWithdrawn: "Event sources withdrawn",
+    sourceWithdrawalReason:
+      "No public Source Item remains for this stable Event ID.",
+    reviewing: "Event under review",
+    reviewReason:
+      "Public propagation is temporarily restricted during high-risk review.",
     mergedInto: "This stable Event ID was merged into",
+    withdrawalReason: "Rights withdrawal",
+    caseReference: "Case reference",
+    corrections: "Corrections",
+    rightsDecisions: "Rights decisions",
+    correctionEvidence: "Evidence",
+    replacementVersion: "Replacement version",
+    rightsDecisionReasons: {
+      source_withdrawal: "Source withdrawal",
+      rights_withdrawal: "Rights withdrawal",
+    },
+    report: "Report / Suggest correction",
     representative: "Representative source",
     sourceCount: (count: number) =>
       `${count} independent ${count === 1 ? "source" : "sources"}`,
+    sourceStatus: {
+      active: "Sources active",
+      source_withdrawn: "Source withdrawn",
+    },
+    evidenceConfidence: {
+      high: "High confidence",
+      medium: "Medium confidence",
+      low: "Low confidence",
+    },
     tombstoneReasons: { duplicate_coverage: "Duplicate coverage" },
   },
   zh: {
@@ -45,9 +72,31 @@ const copy = {
     license: "许可",
     entities: "关联实体",
     merged: "事件已合并",
+    withdrawn: "事件已撤回",
+    sourceWithdrawn: "事件来源已撤回",
+    sourceWithdrawalReason: "此稳定事件 ID 已没有可公开的来源记录。",
+    reviewing: "事件正在核验",
+    reviewReason: "高风险核验期间已临时限制公开传播。",
     mergedInto: "此稳定事件 ID 已合并至",
+    withdrawalReason: "权利撤回",
+    caseReference: "案例编号",
+    corrections: "更正记录",
+    rightsDecisions: "权利决定",
+    correctionEvidence: "证据",
+    replacementVersion: "替代版本",
+    rightsDecisionReasons: {
+      source_withdrawal: "来源撤回",
+      rights_withdrawal: "权利撤回",
+    },
+    report: "报告问题 / 建议更正",
     representative: "代表来源",
     sourceCount: (count: number) => `${count} 个独立来源`,
+    sourceStatus: { active: "来源有效", source_withdrawn: "来源已撤回" },
+    evidenceConfidence: {
+      high: "高置信度",
+      medium: "中置信度",
+      low: "低置信度",
+    },
     tombstoneReasons: { duplicate_coverage: "重复报道" },
   },
 } as const;
@@ -66,7 +115,7 @@ export async function generateMetadata({
   if (!parsedLocale.success) return {};
   const event = await getPublicEvent(resolved.publicId, parsedLocale.data);
   if (!event) {
-    const tombstone = await getEventTombstone(resolved.publicId);
+    const tombstone = await getPublicTombstone("event", resolved.publicId);
     if (!tombstone) return {};
     return { title: `${tombstone.publicId} | AI Radar` };
   }
@@ -96,8 +145,44 @@ export default async function EventDetailPage({
   const event = await getPublicEvent(resolved.publicId, locale);
   const labels = copy[locale];
   if (!event) {
-    const tombstone = await getEventTombstone(resolved.publicId);
+    const tombstone = await getPublicTombstone("event", resolved.publicId);
     if (!tombstone) notFound();
+    if (tombstone.status === "reviewing") {
+      return (
+        <main lang={locale}>
+          <h1>{labels.reviewing}</h1>
+          <p>{labels.reviewReason}</p>
+          <p>
+            {labels.caseReference}: {tombstone.caseReferencePublicId}
+          </p>
+          <time dateTime={tombstone.effectiveAt}>{tombstone.effectiveAt}</time>
+        </main>
+      );
+    }
+    if (tombstone.status === "source_withdrawn") {
+      return (
+        <main lang={locale}>
+          <h1>{labels.sourceWithdrawn}</h1>
+          <p>{labels.sourceWithdrawalReason}</p>
+          <p>
+            {labels.caseReference}: {tombstone.caseReferencePublicId}
+          </p>
+          <time dateTime={tombstone.effectiveAt}>{tombstone.effectiveAt}</time>
+        </main>
+      );
+    }
+    if (tombstone.status === "withdrawn") {
+      return (
+        <main lang={locale}>
+          <h1>{labels.withdrawn}</h1>
+          <p>{labels.withdrawalReason}</p>
+          <p>
+            {labels.caseReference}: {tombstone.caseReferencePublicId}
+          </p>
+          <time dateTime={tombstone.effectiveAt}>{tombstone.effectiveAt}</time>
+        </main>
+      );
+    }
     return (
       <main lang={locale}>
         <h1>{labels.merged}</h1>
@@ -107,7 +192,11 @@ export default async function EventDetailPage({
             {tombstone.targetEventPublicId}
           </a>
         </p>
-        <p>{labels.tombstoneReasons[tombstone.reasonCode]}</p>
+        <p>
+          {tombstone.reasonCode === "duplicate_coverage"
+            ? labels.tombstoneReasons.duplicate_coverage
+            : tombstone.reasonCode}
+        </p>
         <time dateTime={tombstone.mergedAt}>{tombstone.mergedAt}</time>
       </main>
     );
@@ -117,7 +206,9 @@ export default async function EventDetailPage({
   return (
     <main lang={locale}>
       <p>
-        {event.eventType} · {event.factStatus}
+        {event.eventType} · {event.factStatus} ·{" "}
+        {labels.sourceStatus[event.sourceStatus]} ·{" "}
+        {labels.evidenceConfidence[event.evidenceConfidence]}
       </p>
       <h1>{event.localization.title}</h1>
       <p>{event.localization.summary}</p>
@@ -151,6 +242,64 @@ export default async function EventDetailPage({
           {reviewLabels[locale][event.localization.reviewStatus]}
         </p>
       </section>
+      <p>
+        <a href="https://github.com/cryanskl/ai-radar/issues/new">
+          {labels.report}
+        </a>
+      </p>
+      {event.corrections.length > 0 ? (
+        <section>
+          <h2>{labels.corrections}</h2>
+          {event.corrections.map((correction) => (
+            <article key={correction.publicId}>
+              <p>
+                {correction.reasonCode} · {correction.publicId}
+              </p>
+              <time dateTime={correction.effectiveAt}>
+                {correction.effectiveAt}
+              </time>
+              <ul>
+                {correction.changes.map((change) => (
+                  <li key={change.field}>{change.field}</li>
+                ))}
+              </ul>
+              <p>
+                {labels.replacementVersion}: {correction.replacementVersion}
+              </p>
+              {correction.evidence.length > 0 ? (
+                <>
+                  <p>{labels.correctionEvidence}</p>
+                  <ul>
+                    {correction.evidence.map((evidence) => (
+                      <li key={evidence.sourceItemPublicId}>
+                        <a href={evidence.originalUrl}>
+                          {evidence.originalTitle}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </article>
+          ))}
+        </section>
+      ) : null}
+      {event.rightsDecisions.length > 0 ? (
+        <section>
+          <h2>{labels.rightsDecisions}</h2>
+          {event.rightsDecisions.map((decision) => (
+            <article key={decision.publicId}>
+              <p>
+                {labels.rightsDecisionReasons[decision.reasonCode]} ·{" "}
+                {decision.targetPublicId}
+              </p>
+              <time dateTime={decision.effectiveAt}>
+                {decision.effectiveAt}
+              </time>
+            </article>
+          ))}
+        </section>
+      ) : null}
       {event.entities.length > 0 ? (
         <section>
           <h2>{labels.entities}</h2>

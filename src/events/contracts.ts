@@ -1,4 +1,11 @@
 import { z } from "zod";
+import {
+  publicCorrectionSchema,
+  publicRightsDecisionSchema,
+  publicReviewingTombstoneSchema,
+  publicSourceWithdrawnTombstoneSchema,
+  publicWithdrawnTombstoneSchema,
+} from "@/operations/contracts";
 
 export const localeSchema = z.enum(["en", "zh"]);
 export const rightsStatusSchema = z.enum([
@@ -172,6 +179,8 @@ export const publicEventSchema = z
     discoveredAt: timestampSchema,
     lastVerifiedAt: timestampSchema,
     rightsStatus: publicRightsStatusSchema,
+    sourceStatus: z.enum(["active", "source_withdrawn"]),
+    evidenceConfidence: z.enum(["high", "medium", "low"]),
     localization: z
       .object({
         locale: localeSchema,
@@ -187,6 +196,8 @@ export const publicEventSchema = z
       .strict(),
     sources: z.array(publicSourceSchema).min(1),
     entities: z.array(publicEventEntitySchema),
+    corrections: z.array(publicCorrectionSchema),
+    rightsDecisions: z.array(publicRightsDecisionSchema),
   })
   .strict();
 
@@ -209,6 +220,9 @@ export const publicEventTombstoneSchema = z
 export const publicEventResponseSchema = z.union([
   publicEventSchema,
   publicEventTombstoneSchema,
+  publicReviewingTombstoneSchema.extend({ objectType: z.literal("event") }),
+  publicSourceWithdrawnTombstoneSchema,
+  publicWithdrawnTombstoneSchema.extend({ objectType: z.literal("event") }),
 ]);
 
 const candidateSignalsSchema = z

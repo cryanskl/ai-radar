@@ -25,12 +25,27 @@ import {
   entityErrorResponseSchema,
   entityTypeSchema,
   invalidEntityRequestResponseSchema,
-  publicEntitySchema,
+  publicEntityResponseSchema,
   publicEntityVersionSchema,
   relationCreateRequestSchema,
   relationCreateResponseSchema,
   relationTypeSchema,
 } from "@/entities/contracts";
+import {
+  correctionCreateRequestSchema,
+  correctionCreateResponseSchema,
+  editorialCaseReviewRequestSchema,
+  editorialCaseReviewResponseSchema,
+  editorialCaseTransitionRequestSchema,
+  editorialCaseTransitionResponseSchema,
+  entityMergeRequestSchema,
+  entityMergeResponseSchema,
+  invalidOperationRequestResponseSchema,
+  operationErrorResponseSchema,
+  publicCorrectionSchema,
+  rightsDecisionCreateRequestSchema,
+  rightsDecisionCreateResponseSchema,
+} from "@/operations/contracts";
 import { statusResponseSchema } from "./status";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
@@ -59,7 +74,7 @@ const entityCreateRequest = z.toJSONSchema(entityCreateRequestSchema);
 const entityCreateResponse = z.toJSONSchema(entityCreateResponseSchema);
 const relationCreateRequest = z.toJSONSchema(relationCreateRequestSchema);
 const relationCreateResponse = z.toJSONSchema(relationCreateResponseSchema);
-const publicEntity = z.toJSONSchema(publicEntitySchema);
+const publicEntity = z.toJSONSchema(publicEntityResponseSchema);
 const publicEntityVersion = z.toJSONSchema(publicEntityVersionSchema);
 const aliasResolutionResponse = z.toJSONSchema(aliasResolutionResponseSchema);
 const entityErrorResponse = z.toJSONSchema(entityErrorResponseSchema);
@@ -68,6 +83,33 @@ const invalidEntityRequestResponse = z.toJSONSchema(
 );
 const entityType = z.toJSONSchema(entityTypeSchema);
 const relationType = z.toJSONSchema(relationTypeSchema);
+const correctionCreateRequest = z.toJSONSchema(correctionCreateRequestSchema);
+const correctionCreateResponse = z.toJSONSchema(correctionCreateResponseSchema);
+const editorialCaseReviewRequest = z.toJSONSchema(
+  editorialCaseReviewRequestSchema,
+);
+const editorialCaseReviewResponse = z.toJSONSchema(
+  editorialCaseReviewResponseSchema,
+);
+const editorialCaseTransitionRequest = z.toJSONSchema(
+  editorialCaseTransitionRequestSchema,
+);
+const editorialCaseTransitionResponse = z.toJSONSchema(
+  editorialCaseTransitionResponseSchema,
+);
+const rightsDecisionCreateRequest = z.toJSONSchema(
+  rightsDecisionCreateRequestSchema,
+);
+const rightsDecisionCreateResponse = z.toJSONSchema(
+  rightsDecisionCreateResponseSchema,
+);
+const entityMergeRequest = z.toJSONSchema(entityMergeRequestSchema);
+const entityMergeResponse = z.toJSONSchema(entityMergeResponseSchema);
+const publicCorrection = z.toJSONSchema(publicCorrectionSchema);
+const operationErrorResponse = z.toJSONSchema(operationErrorResponseSchema);
+const invalidOperationRequestResponse = z.toJSONSchema(
+  invalidOperationRequestResponseSchema,
+);
 
 const localeParameter = {
   name: "locale",
@@ -83,6 +125,10 @@ const eventError = (description: string) => ({
 const entityError = (description: string) => ({
   description,
   content: { "application/json": { schema: entityErrorResponse } },
+});
+const operationError = (description: string) => ({
+  description,
+  content: { "application/json": { schema: operationErrorResponse } },
 });
 
 export const openApiDocument = {
@@ -190,6 +236,203 @@ export const openApiDocument = {
           },
           401: entityError("An authenticated Owner session is required."),
           409: entityError("An Entity, Alias or Version ID already exists."),
+        },
+      },
+    },
+    "/api/v1/admin/entities/merge": {
+      post: {
+        summary: "Merge one stable Entity identity into another",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: entityMergeRequest } },
+        },
+        responses: {
+          200: {
+            description:
+              "Aliases, Versions, Relations and Correction projections moved to the target; the source stable ID now resolves as a Tombstone.",
+            content: { "application/json": { schema: entityMergeResponse } },
+          },
+          400: {
+            description: "The Entity merge request is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    operationErrorResponse,
+                    invalidOperationRequestResponse,
+                  ],
+                },
+              },
+            },
+          },
+          401: operationError("An authenticated Owner session is required."),
+          404: operationError("The source or target Entity does not exist."),
+          409: operationError(
+            "The Entity identities cannot be merged in their current state.",
+          ),
+        },
+      },
+    },
+    "/api/v1/admin/corrections": {
+      post: {
+        summary: "Apply an evidenced factual Correction",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: correctionCreateRequest } },
+        },
+        responses: {
+          201: {
+            description:
+              "The current public Event or Entity was corrected and an evidenced public Correction history record was created.",
+            content: {
+              "application/json": { schema: correctionCreateResponse },
+            },
+          },
+          400: {
+            description: "The Correction request is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    operationErrorResponse,
+                    invalidOperationRequestResponse,
+                  ],
+                },
+              },
+            },
+          },
+          401: operationError("An authenticated Owner session is required."),
+          404: operationError("The Correction target does not exist."),
+          409: operationError(
+            "The target or Evidence cannot support this Correction.",
+          ),
+        },
+      },
+    },
+    "/api/v1/admin/editorial-cases/restrict": {
+      post: {
+        summary: "Temporarily restrict a high-risk Event or Entity for review",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: editorialCaseReviewRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "The case is reviewing, protected expression is hidden and the stable public ID resolves to a review Tombstone.",
+            content: {
+              "application/json": { schema: editorialCaseReviewResponse },
+            },
+          },
+          400: {
+            description: "The editorial case request is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    operationErrorResponse,
+                    invalidOperationRequestResponse,
+                  ],
+                },
+              },
+            },
+          },
+          401: operationError("An authenticated Owner session is required."),
+          404: operationError("The review target does not exist."),
+          409: operationError(
+            "The target cannot enter review in its current state.",
+          ),
+        },
+      },
+    },
+    "/api/v1/admin/editorial-cases/{publicId}": {
+      patch: {
+        summary: "Reject, appeal or close an audited editorial case",
+        security: [{ ownerSession: [] }],
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: editorialCaseTransitionRequest },
+          },
+        },
+        responses: {
+          200: {
+            description:
+              "The case transition was audited; rejected temporary restrictions restore the prior public record.",
+            content: {
+              "application/json": { schema: editorialCaseTransitionResponse },
+            },
+          },
+          400: {
+            description: "The case transition request is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    operationErrorResponse,
+                    invalidOperationRequestResponse,
+                  ],
+                },
+              },
+            },
+          },
+          401: operationError("An authenticated Owner session is required."),
+          404: operationError("The editorial case does not exist."),
+          409: operationError(
+            "The case cannot make this transition in its current state.",
+          ),
+        },
+      },
+    },
+    "/api/v1/admin/rights-decisions": {
+      post: {
+        summary: "Apply an audited Rights withdrawal decision",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: rightsDecisionCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "Restricted expression was removed from public projections and the durable Rights decision or Tombstone was recorded.",
+            content: {
+              "application/json": { schema: rightsDecisionCreateResponse },
+            },
+          },
+          400: {
+            description: "The Rights decision request is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    operationErrorResponse,
+                    invalidOperationRequestResponse,
+                  ],
+                },
+              },
+            },
+          },
+          401: operationError("An authenticated Owner session is required."),
+          404: operationError("The Rights decision target does not exist."),
+          409: operationError(
+            "The target cannot receive this Rights decision in its current state.",
+          ),
         },
       },
     },
@@ -434,6 +677,27 @@ export const openApiDocument = {
           },
           400: eventError("The requested locale is invalid."),
           404: eventError("The Event is not published."),
+        },
+      },
+    },
+    "/api/v1/corrections/{publicId}": {
+      get: {
+        summary: "Read one evidenced public Correction history record",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "The changed fields, public Evidence, effective time and replacement version for one Correction.",
+            content: { "application/json": { schema: publicCorrection } },
+          },
+          404: operationError("The Correction does not exist."),
         },
       },
     },

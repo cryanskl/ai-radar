@@ -5,6 +5,7 @@ import { relationTypeSchema } from "@/entities/contracts";
 import { getPublicEntity } from "@/entities/service";
 import { localeSchema } from "@/events/contracts";
 import { displayTimestamp } from "@/events/presentation";
+import { getPublicTombstone } from "@/operations/service";
 
 const copy = {
   en: {
@@ -44,6 +45,19 @@ const copy = {
     validity: "Validity",
     verified: "verified",
     versions: "Versions",
+    corrections: "Corrections",
+    correctionEvidence: "Evidence",
+    replacementVersion: "Replacement version",
+    merged: "Entity merged",
+    mergedInto: "This stable Entity ID was merged into",
+    withdrawn: "Entity withdrawn",
+    reviewing: "Entity under review",
+    reviewReason:
+      "Public propagation is temporarily restricted during high-risk review.",
+    withdrawalReason: "Rights withdrawal",
+    caseReference: "Case reference",
+    report: "Report / Suggest correction",
+    tombstoneReasons: { duplicate_identity: "Duplicate identity" },
   },
   zh: {
     aliases: "别名",
@@ -82,6 +96,18 @@ const copy = {
     validity: "有效期",
     verified: "最后核验",
     versions: "版本",
+    corrections: "更正记录",
+    correctionEvidence: "证据",
+    replacementVersion: "替代版本",
+    merged: "实体已合并",
+    mergedInto: "此稳定实体 ID 已合并至",
+    withdrawn: "实体已撤回",
+    reviewing: "实体正在核验",
+    reviewReason: "高风险核验期间已临时限制公开传播。",
+    withdrawalReason: "权利撤回",
+    caseReference: "案例编号",
+    report: "报告问题 / 建议更正",
+    tombstoneReasons: { duplicate_identity: "重复身份" },
   },
 } as const;
 
@@ -99,7 +125,10 @@ export async function generateMetadata({
   const locale = localeSchema.safeParse(resolved.locale);
   if (!locale.success) return {};
   const entity = await getPublicEntity(resolved.publicId, locale.data);
-  if (!entity) return {};
+  if (!entity) {
+    const tombstone = await getPublicTombstone("entity", resolved.publicId);
+    return tombstone ? { title: `${tombstone.publicId} | AI Radar` } : {};
+  }
   return {
     title: `${entity.localization.name} | AI Radar`,
     description: entity.localization.summary,
@@ -142,8 +171,48 @@ export default async function EntityPage({
     locale,
     predicate?.data,
   );
-  if (!entity) notFound();
   const labels = copy[locale];
+  if (!entity) {
+    const tombstone = await getPublicTombstone("entity", resolved.publicId);
+    if (!tombstone) notFound();
+    if (tombstone.status === "reviewing") {
+      return (
+        <main lang={locale}>
+          <h1>{labels.reviewing}</h1>
+          <p>{labels.reviewReason}</p>
+          <p>
+            {labels.caseReference}: {tombstone.caseReferencePublicId}
+          </p>
+          <time dateTime={tombstone.effectiveAt}>{tombstone.effectiveAt}</time>
+        </main>
+      );
+    }
+    if (tombstone.status === "withdrawn") {
+      return (
+        <main lang={locale}>
+          <h1>{labels.withdrawn}</h1>
+          <p>{labels.withdrawalReason}</p>
+          <p>
+            {labels.caseReference}: {tombstone.caseReferencePublicId}
+          </p>
+          <time dateTime={tombstone.effectiveAt}>{tombstone.effectiveAt}</time>
+        </main>
+      );
+    }
+    return (
+      <main lang={locale}>
+        <h1>{labels.merged}</h1>
+        <p>
+          {labels.mergedInto}{" "}
+          <a href={`/${locale}/entities/${tombstone.targetEntityPublicId}`}>
+            {tombstone.targetEntityPublicId}
+          </a>
+        </p>
+        <p>{labels.tombstoneReasons.duplicate_identity}</p>
+        <time dateTime={tombstone.effectiveAt}>{tombstone.effectiveAt}</time>
+      </main>
+    );
+  }
   const graphNodePositions = new Map(
     entity.graph.nodes.map((node, index) => [
       node.nodeId,
@@ -166,6 +235,49 @@ export default async function EntityPage({
         {labels.verified}{" "}
         <time dateTime={entity.lastVerifiedAt}>{entity.lastVerifiedAt}</time>
       </p>
+      <p>
+        <a href="https://github.com/cryanskl/ai-radar/issues/new">
+          {labels.report}
+        </a>
+      </p>
+
+      {entity.corrections.length > 0 ? (
+        <section>
+          <h2>{labels.corrections}</h2>
+          {entity.corrections.map((correction) => (
+            <article key={correction.publicId}>
+              <p>
+                {correction.reasonCode} · {correction.publicId}
+              </p>
+              <time dateTime={correction.effectiveAt}>
+                {correction.effectiveAt}
+              </time>
+              <ul>
+                {correction.changes.map((change) => (
+                  <li key={change.field}>{change.field}</li>
+                ))}
+              </ul>
+              <p>
+                {labels.replacementVersion}: {correction.replacementVersion}
+              </p>
+              {correction.evidence.length > 0 ? (
+                <>
+                  <p>{labels.correctionEvidence}</p>
+                  <ul>
+                    {correction.evidence.map((evidence) => (
+                      <li key={evidence.sourceItemPublicId}>
+                        <a href={evidence.originalUrl}>
+                          {evidence.originalTitle}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </article>
+          ))}
+        </section>
+      ) : null}
 
       <section>
         <h2>{labels.aliases}</h2>

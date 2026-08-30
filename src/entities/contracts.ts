@@ -4,6 +4,12 @@ import {
   publicRightsStatusSchema,
   rightsStatusSchema,
 } from "@/events/contracts";
+import {
+  publicCorrectionSchema,
+  publicEntityMergedTombstoneSchema,
+  publicReviewingTombstoneSchema,
+  publicWithdrawnTombstoneSchema,
+} from "@/operations/contracts";
 
 export const entityTypeSchema = z.enum([
   "model",
@@ -266,8 +272,16 @@ export const publicEntitySchema = z
         truncated: z.boolean(),
       })
       .strict(),
+    corrections: z.array(publicCorrectionSchema),
   })
   .strict();
+
+export const publicEntityResponseSchema = z.union([
+  publicEntitySchema,
+  publicEntityMergedTombstoneSchema,
+  publicReviewingTombstoneSchema.extend({ objectType: z.literal("entity") }),
+  publicWithdrawnTombstoneSchema.extend({ objectType: z.literal("entity") }),
+]);
 
 export const aliasResolutionResponseSchema = z
   .object({
