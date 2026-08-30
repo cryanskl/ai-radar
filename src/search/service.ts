@@ -201,6 +201,64 @@ presentation_documents as (
   left join entity_signals entity_signal
     on document.object_kind = 'entity' and entity_signal.entity_id = document.object_id
   where document.locale = $3::content_locale
+    and (document.entity_type is distinct from 'product' or (
+      exists (
+        select 1 from product_profiles profile
+        join product_observations observation
+          on observation.product_profile_id = profile.id
+          and observation.public_visibility = true
+        join source_items observation_source
+          on observation_source.id = observation.source_item_id
+          and observation_source.public_visibility = true
+          and observation_source.rights_status in (
+            'open', 'attribution_required', 'source_license',
+            'metadata_only', 'link_only'
+          )
+        where profile.entity_id = document.object_id
+          and profile.public_visibility = true
+          and observation.effective_at <= (
+            select max(cutoff_observation.observed_at)
+            from product_observations cutoff_observation
+            join source_items cutoff_source
+              on cutoff_source.id = cutoff_observation.source_item_id
+              and cutoff_source.public_visibility = true
+              and cutoff_source.rights_status in (
+                'open', 'attribution_required', 'source_license',
+                'metadata_only', 'link_only'
+              )
+            where cutoff_observation.product_profile_id = profile.id
+              and cutoff_observation.public_visibility = true
+          )
+      )
+      and exists (
+        select 1 from relations ownership
+        join entities organization
+          on organization.id = ownership.subject_entity_id
+          and organization.type = 'organization'
+          and organization.lifecycle_status = 'active'
+          and organization.public_visibility = true
+        join entity_localized_contents organization_localization
+          on organization_localization.entity_id = organization.id
+          and organization_localization.locale = $3::content_locale
+          and organization_localization.review_status = 'reviewed'
+          and organization_localization.public_visibility = true
+        where ownership.object_entity_id = document.object_id
+          and ownership.predicate = 'DEVELOPS'
+          and ownership.review_status = 'reviewed'
+          and ownership.public_visibility = true
+          and exists (
+            select 1 from relation_evidence evidence
+            join source_items ownership_source
+              on ownership_source.id = evidence.source_item_id
+              and ownership_source.public_visibility = true
+              and ownership_source.rights_status in (
+                'open', 'attribution_required', 'source_license',
+                'metadata_only', 'link_only'
+              )
+            where evidence.relation_id = ownership.id
+          )
+      )
+    ))
 ),
 matches as (
   select term.object_kind::text as kind, term.object_id,
@@ -551,7 +609,65 @@ const hydrateSnapshotItems = async (
       on current_match.object_kind = document.object_kind
       and current_match.object_id = document.object_id
     where document.locale = $1::content_locale
-      and document.public_id = any($2::text[])`,
+      and document.public_id = any($2::text[])
+      and (document.entity_type is distinct from 'product' or (
+        exists (
+          select 1 from product_profiles profile
+          join product_observations observation
+            on observation.product_profile_id = profile.id
+            and observation.public_visibility = true
+          join source_items observation_source
+            on observation_source.id = observation.source_item_id
+            and observation_source.public_visibility = true
+            and observation_source.rights_status in (
+              'open', 'attribution_required', 'source_license',
+              'metadata_only', 'link_only'
+            )
+          where profile.entity_id = document.object_id
+            and profile.public_visibility = true
+            and observation.effective_at <= (
+              select max(cutoff_observation.observed_at)
+              from product_observations cutoff_observation
+              join source_items cutoff_source
+                on cutoff_source.id = cutoff_observation.source_item_id
+                and cutoff_source.public_visibility = true
+                and cutoff_source.rights_status in (
+                  'open', 'attribution_required', 'source_license',
+                  'metadata_only', 'link_only'
+                )
+              where cutoff_observation.product_profile_id = profile.id
+                and cutoff_observation.public_visibility = true
+            )
+        )
+        and exists (
+          select 1 from relations ownership
+          join entities organization
+            on organization.id = ownership.subject_entity_id
+            and organization.type = 'organization'
+            and organization.lifecycle_status = 'active'
+            and organization.public_visibility = true
+          join entity_localized_contents organization_localization
+            on organization_localization.entity_id = organization.id
+            and organization_localization.locale = $1::content_locale
+            and organization_localization.review_status = 'reviewed'
+            and organization_localization.public_visibility = true
+          where ownership.object_entity_id = document.object_id
+            and ownership.predicate = 'DEVELOPS'
+            and ownership.review_status = 'reviewed'
+            and ownership.public_visibility = true
+            and exists (
+              select 1 from relation_evidence evidence
+              join source_items ownership_source
+                on ownership_source.id = evidence.source_item_id
+                and ownership_source.public_visibility = true
+                and ownership_source.rights_status in (
+                  'open', 'attribution_required', 'source_license',
+                  'metadata_only', 'link_only'
+                )
+              where evidence.relation_id = ownership.id
+            )
+        )
+      ))`,
     [input.locale, publicIds, normalizeSearchText(input.q), input.q],
   );
   const currentByKey = new Map(
@@ -577,11 +693,12 @@ const hydrateSnapshotItems = async (
     currentTombstones.rows.map((row) => [`${row.kind}:${row.public_id}`, row]),
   );
 
-  return storedItems.map((stored) => {
+  return storedItems.flatMap((stored) => {
     const key = `${stored.kind}:${stored.publicId}`;
     const current = currentByKey.get(key);
     if (!current) {
-      return tombstoneResult(tombstoneByKey.get(key)!, input.locale);
+      const tombstone = tombstoneByKey.get(key);
+      return tombstone ? [tombstoneResult(tombstone, input.locale)] : [];
     }
     const currentMatch = current.current_match_reason
       ? {
@@ -594,26 +711,28 @@ const hydrateSnapshotItems = async (
           reason: "snapshot_member" as const,
           text: `${current.name} — ${current.summary}`,
         };
-    return searchResultSchema.parse({
-      kind: stored.kind,
-      publicId: stored.publicId,
-      entityType: current.entity_type,
-      status: current.status,
-      name: current.name,
-      summary: current.summary,
-      locale: current.locale,
-      matchedLocale: currentMatch.locale,
-      matchReason: currentMatch.reason,
-      matchedText: currentMatch.text,
-      occurredAt: current.occurred_at?.toISOString() ?? null,
-      lastVerifiedAt: current.last_verified_at.toISOString(),
-      source:
-        current.source_name && current.source_url
-          ? { name: current.source_name, url: current.source_url }
-          : null,
-      signalLanguages: current.signal_languages,
-      replacementPublicId: null,
-    });
+    return [
+      searchResultSchema.parse({
+        kind: stored.kind,
+        publicId: stored.publicId,
+        entityType: current.entity_type,
+        status: current.status,
+        name: current.name,
+        summary: current.summary,
+        locale: current.locale,
+        matchedLocale: currentMatch.locale,
+        matchReason: currentMatch.reason,
+        matchedText: currentMatch.text,
+        occurredAt: current.occurred_at?.toISOString() ?? null,
+        lastVerifiedAt: current.last_verified_at.toISOString(),
+        source:
+          current.source_name && current.source_url
+            ? { name: current.source_name, url: current.source_url }
+            : null,
+        signalLanguages: current.signal_languages,
+        replacementPublicId: null,
+      }),
+    ];
   });
 };
 
@@ -662,7 +781,7 @@ const readSnapshotPage = async (
       searchSnapshotIdentitySchema.parse(payload),
     );
     const items = await hydrateSnapshotItems(client, storedItems, input);
-    const nextOffset = cursor.offset + items.length;
+    const nextOffset = cursor.offset + storedItems.length;
     const response = {
       status: "ok" as const,
       response: {

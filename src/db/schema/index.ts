@@ -7,3 +7,4 @@ export * from "./search";
 export * from "./models";
 export * from "./papers";
 export * from "./repositories";
+export * from "./products";

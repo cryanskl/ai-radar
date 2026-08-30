@@ -256,7 +256,9 @@ export default async function SearchPage({
                 ? `/${locale}/radar/events/${item.publicId}`
                 : item.entityType === "model"
                   ? `/${locale}/models/${item.publicId}`
-                  : `/${locale}/entities/${item.publicId}`;
+                  : item.entityType === "product"
+                    ? `/${locale}/products/${item.publicId}`
+                    : `/${locale}/entities/${item.publicId}`;
             const match = `${labels.matchReason[item.matchReason]} · ${labels.language[item.matchedLocale]}`;
             const crossLanguageAlias =
               item.matchReason === "alias" && item.matchedLocale !== locale

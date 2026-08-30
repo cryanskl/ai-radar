@@ -78,6 +78,16 @@ import {
   repositoryObservationCreateRequestSchema,
   repositoryObservationCreateResponseSchema,
 } from "@/repositories/contracts";
+import {
+  invalidProductRequestResponseSchema,
+  productErrorResponseSchema,
+  productObservationAppendRequestSchema,
+  productObservationAppendResponseSchema,
+  productProfileCreateRequestSchema,
+  productProfileCreateResponseSchema,
+  publicProductDetailSchema,
+  publicProductListSchema,
+} from "@/products/contracts";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
 const eventDraftRequest = z.toJSONSchema(eventDraftRequestSchema);
@@ -138,6 +148,24 @@ const publicRepositoryDetail = z.toJSONSchema(publicRepositoryDetailSchema);
 const repositoryErrorResponse = z.toJSONSchema(repositoryErrorResponseSchema);
 const invalidRepositoryRequestResponse = z.toJSONSchema(
   invalidRepositoryRequestResponseSchema,
+);
+const productProfileCreateRequest = z.toJSONSchema(
+  productProfileCreateRequestSchema,
+);
+const productProfileCreateResponse = z.toJSONSchema(
+  productProfileCreateResponseSchema,
+);
+const productObservationAppendRequest = z.toJSONSchema(
+  productObservationAppendRequestSchema,
+);
+const productObservationAppendResponse = z.toJSONSchema(
+  productObservationAppendResponseSchema,
+);
+const publicProductList = z.toJSONSchema(publicProductListSchema);
+const publicProductDetail = z.toJSONSchema(publicProductDetailSchema);
+const productErrorResponse = z.toJSONSchema(productErrorResponseSchema);
+const invalidProductRequestResponse = z.toJSONSchema(
+  invalidProductRequestResponseSchema,
 );
 const entityType = z.toJSONSchema(entityTypeSchema);
 const relationType = z.toJSONSchema(relationTypeSchema);
@@ -217,6 +245,10 @@ const paperError = (description: string) => ({
 const repositoryError = (description: string) => ({
   description,
   content: { "application/json": { schema: repositoryErrorResponse } },
+});
+const productError = (description: string) => ({
+  description,
+  content: { "application/json": { schema: productErrorResponse } },
 });
 
 export const openApiDocument = {
@@ -731,6 +763,173 @@ export const openApiDocument = {
           },
           400: paperError("The requested locale is invalid."),
           404: paperError("The Paper family is not public."),
+        },
+      },
+    },
+    "/api/v1/products": {
+      get: {
+        summary:
+          "Browse public Products by sourced current facts without a universal score",
+        parameters: [
+          localeParameter,
+          ...["category", "platform", "audience", "region"].map((name) => ({
+            name,
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          })),
+          {
+            name: "pricingMode",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: [
+                "free",
+                "freemium",
+                "subscription",
+                "usage_based",
+                "contact_sales",
+                "open_source",
+              ],
+            },
+          },
+          {
+            name: "lifecycle",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: ["beta", "active", "deprecated", "discontinued"],
+            },
+          },
+          ...["updatedFrom", "updatedTo"].map((name) => ({
+            name,
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date-time" },
+          })),
+          {
+            name: "limit",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+          },
+          {
+            name: "cursor",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Products ordered by their latest rights-cleared sourced observation, with current Organization, availability, lifecycle, pricing and disclosure facts.",
+            content: { "application/json": { schema: publicProductList } },
+          },
+          400: {
+            description: "The Product list filters are invalid.",
+            content: {
+              "application/json": { schema: invalidProductRequestResponse },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/products/{publicId}": {
+      get: {
+        summary:
+          "Read one Product with sourced observations, disclosures, relations and update timeline",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          localeParameter,
+        ],
+        responses: {
+          200: {
+            description:
+              "A bilingual Product profile whose current and historical facts retain source evidence and explicit vendor/commercial disclosure.",
+            content: { "application/json": { schema: publicProductDetail } },
+          },
+          400: productError("The requested locale is invalid."),
+          404: productError("The Product is not public."),
+        },
+      },
+    },
+    "/api/v1/admin/product-profiles": {
+      post: {
+        summary:
+          "Create one Product profile with immutable sourced observations and vendor-reported metrics",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: productProfileCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "The Product profile and its immutable observations were published.",
+            content: {
+              "application/json": { schema: productProfileCreateResponse },
+            },
+          },
+          400: {
+            description:
+              "The request or Product-to-evidence reference is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [productErrorResponse, invalidProductRequestResponse],
+                },
+              },
+            },
+          },
+          401: productError("An authenticated Owner session is required."),
+          409: productError("The Product profile already exists."),
+        },
+      },
+    },
+    "/api/v1/admin/product-observations": {
+      post: {
+        summary:
+          "Append immutable sourced observations and vendor-reported metrics to an existing Product profile",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: productObservationAppendRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "The later Product observations were published without rewriting prior history.",
+            content: {
+              "application/json": {
+                schema: productObservationAppendResponse,
+              },
+            },
+          },
+          400: {
+            description:
+              "The request, Product profile, ownership or evidence reference is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [productErrorResponse, invalidProductRequestResponse],
+                },
+              },
+            },
+          },
+          401: productError("An authenticated Owner session is required."),
+          409: productError("An observation public ID already exists."),
         },
       },
     },
