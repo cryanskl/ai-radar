@@ -1,5 +1,10 @@
 import { z } from "zod";
 import {
+  askErrorResponseSchema,
+  askRequestSchema,
+  askResponseSchema,
+} from "@/ask/contracts";
+import {
   eventDraftRequestSchema,
   eventDraftResponseSchema,
   eventCandidatesResponseSchema,
@@ -308,6 +313,9 @@ const invalidOperationRequestResponse = z.toJSONSchema(
 );
 const searchResponse = z.toJSONSchema(searchResponseSchema);
 const searchErrorResponse = z.toJSONSchema(searchErrorResponseSchema);
+const askRequest = z.toJSONSchema(askRequestSchema);
+const askResponse = z.toJSONSchema(askResponseSchema);
+const askErrorResponse = z.toJSONSchema(askErrorResponseSchema);
 const modelVersionProfileCreateRequest = z.toJSONSchema(
   modelVersionProfileCreateRequestSchema,
 );
@@ -394,6 +402,29 @@ export const openApiDocument = {
     },
   },
   paths: {
+    "/api/v1/ask": {
+      post: {
+        summary:
+          "Answer one question from a bounded, versioned public evidence pack",
+        description:
+          "Uses no temporary web search or tools. The server validates every citation and rejects incompatible benchmark or price comparisons.",
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: askRequest } },
+        },
+        responses: {
+          200: {
+            description:
+              "A cited answer, conflict, incompatible comparison, or explicit abstention with Data Cutoff and Data Version.",
+            content: { "application/json": { schema: askResponse } },
+          },
+          400: {
+            description: "The Ask question or locale is invalid.",
+            content: { "application/json": { schema: askErrorResponse } },
+          },
+        },
+      },
+    },
     "/api/v1/search": {
       get: {
         summary: "Search public Events and Entities without an LLM",

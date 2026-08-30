@@ -7,6 +7,7 @@ import { searchPublicRecords } from "@/search/service";
 const copy = {
   en: {
     heading: "Search",
+    ask: "Ask AI Radar",
     submit: "Search",
     query: "Search AI Radar",
     noResults: "No public records matched this query.",
@@ -71,6 +72,7 @@ const copy = {
   },
   zh: {
     heading: "搜索",
+    ask: "问 AI Radar",
     submit: "搜索",
     query: "搜索 AI Radar",
     noResults: "没有匹配的公开记录。",
@@ -182,6 +184,10 @@ export default async function SearchPage({
 
   return (
     <main>
+      <nav aria-label={locale === "en" ? "Query mode" : "查询模式"}>
+        <span aria-current="page">{labels.heading}</span>{" "}
+        <Link href={`/${locale}/ask`}>{labels.ask}</Link>
+      </nav>
       <h1>{labels.heading}</h1>
       <form action={`/${locale}/search`} method="get">
         <label>

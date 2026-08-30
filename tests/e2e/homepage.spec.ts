@@ -676,7 +676,7 @@ test("exposes every homepage domain and stays keyboard-accessible without mobile
   expect(reachedAsk).toBe(true);
   await expect(ask).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/en\/search$/);
+  await expect(page).toHaveURL(/\/en\/ask$/);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${application.url}/en`);

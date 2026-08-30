@@ -211,7 +211,7 @@ export default async function LocalizedHomePage({
         <search className={styles.search}>
           <div className={styles.searchModes}>
             <span aria-current="page">{labels.search}</span>
-            <Link href={`/${locale}/search`}>{labels.ask}</Link>
+            <Link href={`/${locale}/ask`}>{labels.ask}</Link>
           </div>
           <form action={`/${locale}/search`}>
             <label className={styles.visuallyHidden} htmlFor="home-search">
