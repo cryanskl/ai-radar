@@ -1,4 +1,5 @@
-import { localeSchema, publicEventSchema } from "@/events/contracts";
+import { localeSchema, publicEventResponseSchema } from "@/events/contracts";
+import { getEventTombstone } from "@/events/cluster-service";
 import { getPublicEvent } from "@/events/service";
 
 export async function GET(
@@ -16,6 +17,10 @@ export async function GET(
     (await params).publicId,
     parsedLocale.data,
   );
-  if (!event) return Response.json({ error: "not_found" }, { status: 404 });
-  return Response.json(publicEventSchema.parse(event));
+  if (event) return Response.json(publicEventResponseSchema.parse(event));
+  const tombstone = await getEventTombstone((await params).publicId);
+  if (!tombstone) {
+    return Response.json({ error: "not_found" }, { status: 404 });
+  }
+  return Response.json(publicEventResponseSchema.parse(tombstone));
 }

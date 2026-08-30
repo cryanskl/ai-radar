@@ -15,6 +15,7 @@ import {
 } from "drizzle-orm/pg-core";
 import {
   events,
+  eventMerges,
   localeEnum,
   localizationAuthorshipEnum,
   reviewStatusEnum,
@@ -263,3 +264,19 @@ export const ownerOperationAudits = pgTable("owner_operation_audits", {
     .notNull()
     .defaultNow(),
 });
+
+export const eventMergeRelationMoves = pgTable(
+  "event_merge_relation_moves",
+  {
+    eventMergeId: uuid("event_merge_id")
+      .notNull()
+      .references(() => eventMerges.id, { onDelete: "restrict" }),
+    relationId: uuid("relation_id")
+      .notNull()
+      .references(() => relations.id, { onDelete: "restrict" }),
+    originalEventId: uuid("original_event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "restrict" }),
+  },
+  (move) => [primaryKey({ columns: [move.eventMergeId, move.relationId] })],
+);

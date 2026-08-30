@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import {
   boolean,
   pgEnum,
@@ -7,6 +8,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -101,6 +103,10 @@ export const sourceItems = pgTable(
       .notNull()
       .references(() => sources.id, { onDelete: "restrict" }),
     externalId: text("external_id").notNull(),
+    externalIdVerifiedAt: timestamp("external_id_verified_at", {
+      withTimezone: true,
+    }),
+    isOriginalSource: boolean("is_original_source").notNull().default(false),
     originalUrl: text("original_url").notNull(),
     canonicalUrl: text("canonical_url").notNull(),
     originalTitle: text("original_title").notNull(),
@@ -165,6 +171,7 @@ export const eventSources = pgTable(
   },
   (eventSource) => [
     primaryKey({ columns: [eventSource.eventId, eventSource.sourceItemId] }),
+    unique().on(eventSource.sourceItemId),
   ],
 );
 
@@ -204,6 +211,68 @@ export const eventPublicationAudits = pgTable("event_publication_audits", {
   actorRole: text("actor_role").notNull(),
   fromState: publicationStateEnum("from_state").notNull(),
   toState: publicationStateEnum("to_state").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const eventMergeStatusEnum = pgEnum("event_merge_status", [
+  "active",
+  "split",
+]);
+
+export const eventMerges = pgTable(
+  "event_merges",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => randomUUID()),
+    sourceEventId: uuid("source_event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "restrict" }),
+    targetEventId: uuid("target_event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "restrict" }),
+    status: eventMergeStatusEnum("status").notNull().default("active"),
+    publicReasonCode: text("public_reason_code").notNull(),
+    mergedAt: timestamp("merged_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    splitAt: timestamp("split_at", { withTimezone: true }),
+  },
+  (eventMerge) => [
+    uniqueIndex("event_merges_active_source_unique")
+      .on(eventMerge.sourceEventId)
+      .where(sql`${eventMerge.status} = 'active'`),
+  ],
+);
+
+export const eventMergeSourceMoves = pgTable(
+  "event_merge_source_moves",
+  {
+    eventMergeId: uuid("event_merge_id")
+      .notNull()
+      .references(() => eventMerges.id, { onDelete: "restrict" }),
+    sourceItemId: uuid("source_item_id")
+      .notNull()
+      .references(() => sourceItems.id, { onDelete: "restrict" }),
+  },
+  (move) => [primaryKey({ columns: [move.eventMergeId, move.sourceItemId] })],
+);
+
+export const eventClusterAudits = pgTable("event_cluster_audits", {
+  id: uuid("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  action: text("action").notNull(),
+  actorRole: text("actor_role").notNull(),
+  sourceEventId: uuid("source_event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "restrict" }),
+  targetEventId: uuid("target_event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "restrict" }),
+  internalNote: text("internal_note").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

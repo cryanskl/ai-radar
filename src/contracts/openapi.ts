@@ -2,11 +2,17 @@ import { z } from "zod";
 import {
   eventDraftRequestSchema,
   eventDraftResponseSchema,
+  eventCandidatesResponseSchema,
   eventErrorResponseSchema,
+  eventMergeRequestSchema,
+  eventMergeResponseSchema,
   eventPublishResponseSchema,
   invalidEventRequestResponseSchema,
   publicEventListSchema,
-  publicEventSchema,
+  publicEventResponseSchema,
+  eventSplitRequestSchema,
+  eventSplitPreviewResponseSchema,
+  eventSplitResponseSchema,
 } from "@/events/contracts";
 import {
   arxivSourceConfigurationResponseSchema,
@@ -35,8 +41,16 @@ const invalidEventRequestResponse = z.toJSONSchema(
   invalidEventRequestResponseSchema,
 );
 const eventPublishResponse = z.toJSONSchema(eventPublishResponseSchema);
-const publicEvent = z.toJSONSchema(publicEventSchema);
+const publicEvent = z.toJSONSchema(publicEventResponseSchema);
 const publicEventList = z.toJSONSchema(publicEventListSchema);
+const eventCandidatesResponse = z.toJSONSchema(eventCandidatesResponseSchema);
+const eventMergeRequest = z.toJSONSchema(eventMergeRequestSchema);
+const eventMergeResponse = z.toJSONSchema(eventMergeResponseSchema);
+const eventSplitRequest = z.toJSONSchema(eventSplitRequestSchema);
+const eventSplitPreviewResponse = z.toJSONSchema(
+  eventSplitPreviewResponseSchema,
+);
+const eventSplitResponse = z.toJSONSchema(eventSplitResponseSchema);
 const arxivSourceConfigurationResponse = z.toJSONSchema(
   arxivSourceConfigurationResponseSchema,
 );
@@ -245,6 +259,121 @@ export const openApiDocument = {
           401: eventError("An authenticated Owner session is required."),
           404: eventError("The Source Item is not in the Inbox."),
           409: eventError("The Source Item or Event was already converted."),
+        },
+      },
+    },
+    "/api/v1/admin/events/{publicId}/candidates": {
+      get: {
+        summary: "Retrieve evidenced clustering candidates for one Event",
+        security: [{ ownerSession: [] }],
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Candidates derived from verified identifiers, canonical URLs, time proximity and shared Entities.",
+            content: {
+              "application/json": { schema: eventCandidatesResponse },
+            },
+          },
+          401: eventError("An authenticated Owner session is required."),
+          404: eventError("The Event does not exist."),
+        },
+      },
+    },
+    "/api/v1/admin/events/merge": {
+      post: {
+        summary: "Merge one reviewed Event into another",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: eventMergeRequest } },
+        },
+        responses: {
+          200: {
+            description:
+              "Sources and Relations moved to the target; the source ID now resolves as a Tombstone.",
+            content: { "application/json": { schema: eventMergeResponse } },
+          },
+          400: {
+            description: "The merge request is invalid JSON or Event data.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [eventErrorResponse, invalidEventRequestResponse],
+                },
+              },
+            },
+          },
+          401: eventError("An authenticated Owner session is required."),
+          404: eventError("The source or target Event does not exist."),
+          409: eventError(
+            "The Events cannot be merged in their current state.",
+          ),
+        },
+      },
+    },
+    "/api/v1/admin/events/split": {
+      post: {
+        summary: "Split a previously merged Event back out",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: eventSplitRequest } },
+        },
+        responses: {
+          200: {
+            description:
+              "The original Sources and Relations were restored to the merged Event identity.",
+            content: { "application/json": { schema: eventSplitResponse } },
+          },
+          400: {
+            description: "The split request is invalid JSON or Event data.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [eventErrorResponse, invalidEventRequestResponse],
+                },
+              },
+            },
+          },
+          401: eventError("An authenticated Owner session is required."),
+          404: eventError("The merged Event does not exist."),
+          409: eventError("The Event does not have an active merge to split."),
+        },
+      },
+    },
+    "/api/v1/admin/events/{publicId}/split-preview": {
+      get: {
+        summary: "Preview the impact of splitting a merged Event",
+        security: [{ ownerSession: [] }],
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Sources, Relations, localizations, representatives and Tombstone state that the split will restore.",
+            content: {
+              "application/json": { schema: eventSplitPreviewResponse },
+            },
+          },
+          401: eventError("An authenticated Owner session is required."),
+          404: eventError("The merged Event does not exist."),
+          409: eventError(
+            "The Event does not have an active merge to preview.",
+          ),
         },
       },
     },

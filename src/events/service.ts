@@ -68,6 +68,10 @@ export const createEventDraft = async (input: EventDraftRequest) => {
       .insert(sourceItems)
       .values({
         ...input.sourceItem,
+        externalIdVerifiedAt: input.sourceItem.externalIdVerifiedAt
+          ? new Date(input.sourceItem.externalIdVerifiedAt)
+          : null,
+        isOriginalSource: input.sourceItem.isOriginalSource ?? false,
         sourceId: source.id,
         publishedAt: new Date(input.sourceItem.publishedAt),
         discoveredAt: new Date(input.sourceItem.discoveredAt),
@@ -364,6 +368,8 @@ const selectPublicEventRows = (locale: "en" | "zh", publicId?: string) =>
       sourceRightsStatus: sourceItems.rightsStatus,
       sourceAttribution: sourceItems.attribution,
       sourceLicenseUrl: sourceItems.licenseUrl,
+      sourceIsPrimary: eventSources.isPrimary,
+      sourceIsOriginal: sourceItems.isOriginalSource,
     })
     .from(events)
     .innerJoin(localizedContents, eq(localizedContents.eventId, events.id))
@@ -421,6 +427,8 @@ const mapPublicEvents = (
         rightsStatus: (typeof rows)[number]["sourceRightsStatus"];
         attribution: string;
         licenseUrl: string | null;
+        isPrimary: boolean;
+        isOriginalSource: boolean;
       }>;
       entities: Array<{
         publicId: string;
@@ -469,6 +477,8 @@ const mapPublicEvents = (
       rightsStatus: row.sourceRightsStatus,
       attribution: row.sourceAttribution,
       licenseUrl: row.sourceLicenseUrl,
+      isPrimary: row.sourceIsPrimary,
+      isOriginalSource: row.sourceIsOriginal,
     });
   }
 

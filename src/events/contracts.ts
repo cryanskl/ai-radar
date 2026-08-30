@@ -45,6 +45,8 @@ export const eventDraftRequestSchema = z
       .object({
         publicId: publicIdSchema,
         externalId: z.string().min(1),
+        externalIdVerifiedAt: timestampSchema.nullable().optional(),
+        isOriginalSource: z.boolean().optional(),
         originalUrl: httpUrlSchema,
         canonicalUrl: httpUrlSchema,
         originalTitle: z.string().min(1),
@@ -122,6 +124,8 @@ const publicSourceSchema = z
     rightsStatus: publicRightsStatusSchema,
     attribution: z.string().min(1),
     licenseUrl: httpUrlSchema.nullable(),
+    isPrimary: z.boolean(),
+    isOriginalSource: z.boolean(),
   })
   .strict();
 
@@ -192,6 +196,115 @@ export const publicEventListSchema = z
   })
   .strict();
 
+export const publicEventTombstoneSchema = z
+  .object({
+    publicId: publicIdSchema,
+    status: z.literal("merged_into"),
+    targetEventPublicId: publicIdSchema,
+    reasonCode: z.literal("duplicate_coverage"),
+    mergedAt: timestampSchema,
+  })
+  .strict();
+
+export const publicEventResponseSchema = z.union([
+  publicEventSchema,
+  publicEventTombstoneSchema,
+]);
+
+const candidateSignalsSchema = z
+  .object({
+    verifiedExternalIds: z.array(z.string().min(1)),
+    canonicalUrls: z.array(httpUrlSchema),
+    timeDistanceMinutes: z.number().int().nonnegative(),
+    sharedEntityPublicIds: z.array(publicIdSchema),
+  })
+  .strict();
+
+const eventMergePreviewSchema = z
+  .object({
+    sourceItemPublicIdsToMove: z.array(publicIdSchema).min(1),
+    relationPublicIdsToMove: z.array(publicIdSchema),
+    localizedContentLocalesPreserved: z.array(localeSchema).min(1),
+    representativeSourceItemPublicId: publicIdSchema,
+    tombstone: z
+      .object({
+        publicId: publicIdSchema,
+        status: z.literal("merged_into"),
+        targetEventPublicId: publicIdSchema,
+      })
+      .strict(),
+  })
+  .strict();
+
+export const eventCandidatesResponseSchema = z
+  .object({
+    eventPublicId: publicIdSchema,
+    candidates: z.array(
+      z
+        .object({
+          eventPublicId: publicIdSchema,
+          confidence: z.number().int().min(0).max(100),
+          highImpact: z.boolean(),
+          requiresOwnerReview: z.boolean(),
+          signals: candidateSignalsSchema,
+          mergePreview: eventMergePreviewSchema,
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+export const eventMergeRequestSchema = z
+  .object({
+    targetEventPublicId: publicIdSchema,
+    sourceEventPublicId: publicIdSchema,
+    publicReasonCode: z.literal("duplicate_coverage"),
+    internalNote: z.string().trim().min(1),
+  })
+  .strict()
+  .refine(
+    ({ sourceEventPublicId, targetEventPublicId }) =>
+      sourceEventPublicId !== targetEventPublicId,
+    { message: "Source and target Events must be distinct" },
+  );
+
+export const eventMergeResponseSchema = z
+  .object({
+    status: z.literal("merged"),
+    sourceEventPublicId: publicIdSchema,
+    targetEventPublicId: publicIdSchema,
+    sourceCount: z.number().int().positive(),
+  })
+  .strict();
+
+export const eventSplitRequestSchema = z
+  .object({
+    mergedEventPublicId: publicIdSchema,
+    internalNote: z.string().trim().min(1),
+  })
+  .strict();
+
+export const eventSplitPreviewResponseSchema = z
+  .object({
+    mergedEventPublicId: publicIdSchema,
+    targetEventPublicId: publicIdSchema,
+    sourceItemPublicIdsToRestore: z.array(publicIdSchema).min(1),
+    relationPublicIdsToRestore: z.array(publicIdSchema),
+    localizedContentLocalesToRestore: z.array(localeSchema).min(1),
+    restoredRepresentativeSourceItemPublicId: publicIdSchema,
+    targetRepresentativeSourceItemPublicId: publicIdSchema,
+    tombstoneStatusAfterSplit: z.literal("removed"),
+  })
+  .strict();
+
+export const eventSplitResponseSchema = z
+  .object({
+    status: z.literal("split"),
+    restoredEventPublicId: publicIdSchema,
+    targetEventPublicId: publicIdSchema,
+  })
+  .strict();
+
 export const eventPublishResponseSchema = z
   .object({
     status: z.literal("published"),
@@ -207,6 +320,8 @@ export const eventErrorResponseSchema = z
       "invalid_locale",
       "not_found",
       "not_publishable",
+      "not_mergeable",
+      "not_splittable",
       "already_exists",
     ]),
   })
@@ -220,3 +335,5 @@ export const invalidEventRequestResponseSchema = z
   .strict();
 
 export type EventDraftRequest = z.infer<typeof eventDraftRequestSchema>;
+export type EventMergeRequest = z.infer<typeof eventMergeRequestSchema>;
+export type EventSplitRequest = z.infer<typeof eventSplitRequestSchema>;

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { localeSchema } from "@/events/contracts";
+import { getEventTombstone } from "@/events/cluster-service";
 import {
   authorshipLabels,
   displayTimestamp,
@@ -23,6 +24,12 @@ const copy = {
     attribution: "Attribution",
     license: "License",
     entities: "Related entities",
+    merged: "Event merged",
+    mergedInto: "This stable Event ID was merged into",
+    representative: "Representative source",
+    sourceCount: (count: number) =>
+      `${count} independent ${count === 1 ? "source" : "sources"}`,
+    tombstoneReasons: { duplicate_coverage: "Duplicate coverage" },
   },
   zh: {
     occurred: "发生时间",
@@ -37,6 +44,11 @@ const copy = {
     attribution: "署名",
     license: "许可",
     entities: "关联实体",
+    merged: "事件已合并",
+    mergedInto: "此稳定事件 ID 已合并至",
+    representative: "代表来源",
+    sourceCount: (count: number) => `${count} 个独立来源`,
+    tombstoneReasons: { duplicate_coverage: "重复报道" },
   },
 } as const;
 
@@ -53,7 +65,11 @@ export async function generateMetadata({
   const parsedLocale = localeSchema.safeParse(resolved.locale);
   if (!parsedLocale.success) return {};
   const event = await getPublicEvent(resolved.publicId, parsedLocale.data);
-  if (!event) return {};
+  if (!event) {
+    const tombstone = await getEventTombstone(resolved.publicId);
+    if (!tombstone) return {};
+    return { title: `${tombstone.publicId} | AI Radar` };
+  }
 
   return {
     title: `${event.localization.title} | AI Radar`,
@@ -78,8 +94,24 @@ export default async function EventDetailPage({
   if (!parsedLocale.success) notFound();
   const locale = parsedLocale.data;
   const event = await getPublicEvent(resolved.publicId, locale);
-  if (!event) notFound();
   const labels = copy[locale];
+  if (!event) {
+    const tombstone = await getEventTombstone(resolved.publicId);
+    if (!tombstone) notFound();
+    return (
+      <main lang={locale}>
+        <h1>{labels.merged}</h1>
+        <p>
+          {labels.mergedInto}{" "}
+          <a href={`/${locale}/radar/events/${tombstone.targetEventPublicId}`}>
+            {tombstone.targetEventPublicId}
+          </a>
+        </p>
+        <p>{labels.tombstoneReasons[tombstone.reasonCode]}</p>
+        <time dateTime={tombstone.mergedAt}>{tombstone.mergedAt}</time>
+      </main>
+    );
+  }
   const separator = locale === "zh" ? "：" : ": ";
 
   return (
@@ -136,9 +168,15 @@ export default async function EventDetailPage({
       ) : null}
       <section>
         <h2>{labels.sources}</h2>
+        <p>
+          {labels.sourceCount(
+            new Set(event.sources.map(({ publicId }) => publicId)).size,
+          )}
+        </p>
         {event.sources.map((source) => (
           <article key={source.sourceItemPublicId}>
             <h3>{source.name}</h3>
+            {source.isPrimary ? <p>{labels.representative}</p> : null}
             <p>
               {labels.sourceTier}
               {separator}
