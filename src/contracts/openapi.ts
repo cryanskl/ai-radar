@@ -98,6 +98,14 @@ import {
   publicPromptDetailSchema,
   publicPromptListSchema,
 } from "@/prompts/contracts";
+import {
+  invalidSkillRequestResponseSchema,
+  publicSkillDetailSchema,
+  publicSkillListSchema,
+  skillErrorResponseSchema,
+  skillProfileCreateRequestSchema,
+  skillProfileCreateResponseSchema,
+} from "@/skills/contracts";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
 const eventDraftRequest = z.toJSONSchema(eventDraftRequestSchema);
@@ -195,6 +203,18 @@ const promptErrorResponse = z.toJSONSchema(promptErrorResponseSchema);
 const invalidPromptRequestResponse = z.toJSONSchema(
   invalidPromptRequestResponseSchema,
 );
+const skillProfileCreateRequest = z.toJSONSchema(
+  skillProfileCreateRequestSchema,
+);
+const skillProfileCreateResponse = z.toJSONSchema(
+  skillProfileCreateResponseSchema,
+);
+const publicSkillList = z.toJSONSchema(publicSkillListSchema);
+const publicSkillDetail = z.toJSONSchema(publicSkillDetailSchema);
+const skillErrorResponse = z.toJSONSchema(skillErrorResponseSchema);
+const invalidSkillRequestResponse = z.toJSONSchema(
+  invalidSkillRequestResponseSchema,
+);
 const entityType = z.toJSONSchema(entityTypeSchema);
 const relationType = z.toJSONSchema(relationTypeSchema);
 const correctionCreateRequest = z.toJSONSchema(correctionCreateRequestSchema);
@@ -281,6 +301,10 @@ const productError = (description: string) => ({
 const promptError = (description: string) => ({
   description,
   content: { "application/json": { schema: promptErrorResponse } },
+});
+const skillError = (description: string) => ({
+  description,
+  content: { "application/json": { schema: skillErrorResponse } },
 });
 
 export const openApiDocument = {
@@ -1134,6 +1158,121 @@ export const openApiDocument = {
           },
           401: promptError("An authenticated Owner session is required."),
           409: promptError("The validation observation already exists."),
+        },
+      },
+    },
+    "/api/v1/skills": {
+      get: {
+        summary:
+          "Discover versioned Skills by platform, permission, task, installation method, license and public rights status",
+        parameters: [
+          localeParameter,
+          ...["platform", "permission", "task", "license"].map((name) => ({
+            name,
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          })),
+          {
+            name: "installationMethod",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: ["manual", "package_manager", "marketplace", "repository"],
+            },
+          },
+          {
+            name: "rightsStatus",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: [
+                "open",
+                "attribution_required",
+                "source_license",
+                "metadata_only",
+                "link_only",
+              ],
+            },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Permission-aware Skill discovery with the latest evidenced version and bounded security claims.",
+            content: { "application/json": { schema: publicSkillList } },
+          },
+          400: {
+            description: "The Skill list filters are invalid.",
+            content: {
+              "application/json": { schema: invalidSkillRequestResponse },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/skills/{publicId}": {
+      get: {
+        summary:
+          "Read one Skill with versioned permissions, dependencies, sources and review scope",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          localeParameter,
+        ],
+        responses: {
+          200: {
+            description:
+              "A permission-aware Skill profile. Installation is represented only by an official external documentation link.",
+            content: { "application/json": { schema: publicSkillDetail } },
+          },
+          400: {
+            description: "The requested locale is invalid.",
+            content: {
+              "application/json": { schema: invalidSkillRequestResponse },
+            },
+          },
+          404: skillError("The Skill is not public."),
+        },
+      },
+    },
+    "/api/v1/admin/skill-profiles": {
+      post: {
+        summary:
+          "Publish one sourced Skill profile with immutable version capability snapshots",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: skillProfileCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description: "The permission-aware Skill profile was published.",
+            content: {
+              "application/json": { schema: skillProfileCreateResponse },
+            },
+          },
+          400: {
+            description:
+              "The request, Skill identity, version or source evidence is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [skillErrorResponse, invalidSkillRequestResponse],
+                },
+              },
+            },
+          },
+          401: skillError("An authenticated Owner session is required."),
+          409: skillError("The Skill profile already exists."),
         },
       },
     },

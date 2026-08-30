@@ -323,6 +323,55 @@ presentation_documents as (
           'metadata_only', 'link_only'
         )
     ))
+    and (document.entity_type is distinct from 'skill' or exists (
+      select 1 from skill_profiles profile
+      join source_items profile_source
+        on profile_source.id = profile.source_item_id
+        and profile_source.public_visibility = true
+        and profile_source.rights_status in (
+          'open', 'attribution_required', 'source_license',
+          'metadata_only', 'link_only'
+        )
+      join skill_version_profiles version_profile
+        on version_profile.skill_profile_id = profile.id
+        and version_profile.public_visibility = true
+      join skill_version_localized_contents skill_localization
+        on skill_localization.skill_version_profile_id = version_profile.id
+        and skill_localization.locale = $3::content_locale
+        and skill_localization.review_status = 'reviewed'
+        and skill_localization.public_visibility = true
+      join entity_versions version on version.id = version_profile.entity_version_id
+        and version.entity_id = document.object_id
+        and version.public_visibility = true
+      join source_items version_source
+        on version_source.id = version_profile.source_item_id
+        and version_source.public_visibility = true
+        and version_source.rights_status in (
+          'open', 'attribution_required', 'source_license',
+          'metadata_only', 'link_only'
+        )
+      join relations relation on relation.subject_entity_id = document.object_id
+        and relation.predicate = 'SUPPORTS'
+        and relation.review_status = 'reviewed'
+        and relation.public_visibility = true
+      join entities target on target.id = relation.object_entity_id
+        and target.type = 'product' and target.lifecycle_status = 'active'
+        and target.public_visibility = true
+      join relation_evidence evidence on evidence.relation_id = relation.id
+      join source_items relation_source
+        on relation_source.id = evidence.source_item_id
+        and relation_source.public_visibility = true
+        and relation_source.rights_status in (
+          'open', 'attribution_required', 'source_license',
+          'metadata_only', 'link_only'
+        )
+      where profile.entity_id = document.object_id
+        and profile.public_visibility = true
+        and profile.rights_status in (
+          'open', 'attribution_required', 'source_license',
+          'metadata_only', 'link_only'
+        )
+    ))
 ),
 matches as (
   select term.object_kind::text as kind, term.object_id,
@@ -781,6 +830,55 @@ const hydrateSnapshotItems = async (
           and relation.predicate = 'WORKS_WITH'
           and relation.review_status = 'reviewed'
           and relation.public_visibility = true
+        join relation_evidence evidence on evidence.relation_id = relation.id
+        join source_items relation_source
+          on relation_source.id = evidence.source_item_id
+          and relation_source.public_visibility = true
+          and relation_source.rights_status in (
+            'open', 'attribution_required', 'source_license',
+            'metadata_only', 'link_only'
+          )
+        where profile.entity_id = document.object_id
+          and profile.public_visibility = true
+          and profile.rights_status in (
+            'open', 'attribution_required', 'source_license',
+            'metadata_only', 'link_only'
+          )
+      ))
+      and (document.entity_type is distinct from 'skill' or exists (
+        select 1 from skill_profiles profile
+        join source_items profile_source
+          on profile_source.id = profile.source_item_id
+          and profile_source.public_visibility = true
+          and profile_source.rights_status in (
+            'open', 'attribution_required', 'source_license',
+            'metadata_only', 'link_only'
+          )
+        join skill_version_profiles version_profile
+          on version_profile.skill_profile_id = profile.id
+          and version_profile.public_visibility = true
+        join skill_version_localized_contents skill_localization
+          on skill_localization.skill_version_profile_id = version_profile.id
+          and skill_localization.locale = $1::content_locale
+          and skill_localization.review_status = 'reviewed'
+          and skill_localization.public_visibility = true
+        join entity_versions version on version.id = version_profile.entity_version_id
+          and version.entity_id = document.object_id
+          and version.public_visibility = true
+        join source_items version_source
+          on version_source.id = version_profile.source_item_id
+          and version_source.public_visibility = true
+          and version_source.rights_status in (
+            'open', 'attribution_required', 'source_license',
+            'metadata_only', 'link_only'
+          )
+        join relations relation on relation.subject_entity_id = document.object_id
+          and relation.predicate = 'SUPPORTS'
+          and relation.review_status = 'reviewed'
+          and relation.public_visibility = true
+        join entities target on target.id = relation.object_entity_id
+          and target.type = 'product' and target.lifecycle_status = 'active'
+          and target.public_visibility = true
         join relation_evidence evidence on evidence.relation_id = relation.id
         join source_items relation_source
           on relation_source.id = evidence.source_item_id
