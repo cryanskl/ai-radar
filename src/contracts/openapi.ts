@@ -116,6 +116,18 @@ import {
   publicGuideDetailSchema,
   publicGuideListSchema,
 } from "@/guides/contracts";
+import {
+  featuredSelectionCreateRequestSchema,
+  featuredSelectionCreateResponseSchema,
+  invalidRankingRequestResponseSchema,
+  publicRankingDetailSchema,
+  publicRankingListSchema,
+  rankingDefinitionCreateRequestSchema,
+  rankingDefinitionCreateResponseSchema,
+  rankingErrorResponseSchema,
+  rankingObservationCreateRequestSchema,
+  rankingObservationCreateResponseSchema,
+} from "@/rankings/contracts";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
 const eventDraftRequest = z.toJSONSchema(eventDraftRequestSchema);
@@ -241,6 +253,30 @@ const guideErrorResponse = z.toJSONSchema(guideErrorResponseSchema);
 const invalidGuideRequestResponse = z.toJSONSchema(
   invalidGuideRequestResponseSchema,
 );
+const rankingDefinitionCreateRequest = z.toJSONSchema(
+  rankingDefinitionCreateRequestSchema,
+);
+const rankingDefinitionCreateResponse = z.toJSONSchema(
+  rankingDefinitionCreateResponseSchema,
+);
+const rankingObservationCreateRequest = z.toJSONSchema(
+  rankingObservationCreateRequestSchema,
+);
+const rankingObservationCreateResponse = z.toJSONSchema(
+  rankingObservationCreateResponseSchema,
+);
+const featuredSelectionCreateRequest = z.toJSONSchema(
+  featuredSelectionCreateRequestSchema,
+);
+const featuredSelectionCreateResponse = z.toJSONSchema(
+  featuredSelectionCreateResponseSchema,
+);
+const publicRankingList = z.toJSONSchema(publicRankingListSchema);
+const publicRankingDetail = z.toJSONSchema(publicRankingDetailSchema);
+const rankingErrorResponse = z.toJSONSchema(rankingErrorResponseSchema);
+const invalidRankingRequestResponse = z.toJSONSchema(
+  invalidRankingRequestResponseSchema,
+);
 const entityType = z.toJSONSchema(entityTypeSchema);
 const relationType = z.toJSONSchema(relationTypeSchema);
 const correctionCreateRequest = z.toJSONSchema(correctionCreateRequestSchema);
@@ -335,6 +371,10 @@ const skillError = (description: string) => ({
 const guideError = (description: string) => ({
   description,
   content: { "application/json": { schema: guideErrorResponse } },
+});
+const rankingError = (description: string) => ({
+  description,
+  content: { "application/json": { schema: rankingErrorResponse } },
 });
 
 export const openApiDocument = {
@@ -1465,6 +1505,192 @@ export const openApiDocument = {
           },
           401: guideError("An authenticated Owner session is required."),
           409: guideError("The Guide status observation already exists."),
+        },
+      },
+    },
+    "/api/v1/rankings": {
+      get: {
+        summary:
+          "Browse versioned Ranking Definitions and physically separate Featured selections",
+        parameters: [
+          localeParameter,
+          {
+            name: "targetType",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: [
+                "event",
+                "model",
+                "paper",
+                "product",
+                "repository",
+                "prompt",
+                "skill",
+                "guide",
+              ],
+            },
+          },
+          {
+            name: "kind",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: ["latest", "trending", "benchmark", "value"],
+            },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Current Ranking methods with Data Cutoffs and editorial Featured records without purchasable ranking influence.",
+            content: { "application/json": { schema: publicRankingList } },
+          },
+          400: {
+            description: "The Ranking filters are invalid.",
+            content: {
+              "application/json": { schema: invalidRankingRequestResponse },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/rankings/{publicId}": {
+      get: {
+        summary:
+          "Read one Ranking method version and its current evidenced observations",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          localeParameter,
+          {
+            name: "methodologyVersion",
+            in: "query",
+            required: false,
+            schema: { type: "string", pattern: "^\\d+\\.\\d+\\.\\d+$" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "The question, eligibility, method, limitations, Data Cutoff, evidence and active or insufficient observations.",
+            content: { "application/json": { schema: publicRankingDetail } },
+          },
+          400: {
+            description: "The locale or methodology version is invalid.",
+            content: {
+              "application/json": { schema: invalidRankingRequestResponse },
+            },
+          },
+          404: rankingError("The Ranking Definition is not public."),
+        },
+      },
+    },
+    "/api/v1/admin/ranking-definitions": {
+      post: {
+        summary:
+          "Publish an immutable bilingual version of a Ranking Definition",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: rankingDefinitionCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "The Ranking Definition or new method version was published.",
+            content: {
+              "application/json": { schema: rankingDefinitionCreateResponse },
+            },
+          },
+          400: {
+            description: "The method, version sequence or request is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [rankingErrorResponse, invalidRankingRequestResponse],
+                },
+              },
+            },
+          },
+          401: rankingError("An authenticated Owner session is required."),
+          409: rankingError("The Ranking method version already exists."),
+        },
+      },
+    },
+    "/api/v1/admin/ranking-observations": {
+      post: {
+        summary:
+          "Publish one time-bound evidenced Ranking Observation under an exact method version",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: rankingObservationCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "The active or explicit Insufficient Evidence observation was published.",
+            content: {
+              "application/json": { schema: rankingObservationCreateResponse },
+            },
+          },
+          400: {
+            description: "The method, target, evidence or request is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [rankingErrorResponse, invalidRankingRequestResponse],
+                },
+              },
+            },
+          },
+          401: rankingError("An authenticated Owner session is required."),
+          409: rankingError("The Ranking Observation already exists."),
+        },
+      },
+    },
+    "/api/v1/admin/featured-selections": {
+      post: {
+        summary:
+          "Publish an evidenced bilingual Featured selection that cannot influence natural ranking",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: featuredSelectionCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description: "The editorial Featured selection was published.",
+            content: {
+              "application/json": { schema: featuredSelectionCreateResponse },
+            },
+          },
+          400: {
+            description:
+              "The target, evidence, disclosure or request is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [rankingErrorResponse, invalidRankingRequestResponse],
+                },
+              },
+            },
+          },
+          401: rankingError("An authenticated Owner session is required."),
+          409: rankingError("The Featured selection already exists."),
         },
       },
     },
