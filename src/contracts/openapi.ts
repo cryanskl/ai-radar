@@ -88,6 +88,16 @@ import {
   publicProductDetailSchema,
   publicProductListSchema,
 } from "@/products/contracts";
+import {
+  invalidPromptRequestResponseSchema,
+  promptErrorResponseSchema,
+  promptProfileCreateRequestSchema,
+  promptProfileCreateResponseSchema,
+  promptValidationAppendRequestSchema,
+  promptValidationAppendResponseSchema,
+  publicPromptDetailSchema,
+  publicPromptListSchema,
+} from "@/prompts/contracts";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
 const eventDraftRequest = z.toJSONSchema(eventDraftRequestSchema);
@@ -166,6 +176,24 @@ const publicProductDetail = z.toJSONSchema(publicProductDetailSchema);
 const productErrorResponse = z.toJSONSchema(productErrorResponseSchema);
 const invalidProductRequestResponse = z.toJSONSchema(
   invalidProductRequestResponseSchema,
+);
+const promptProfileCreateRequest = z.toJSONSchema(
+  promptProfileCreateRequestSchema,
+);
+const promptProfileCreateResponse = z.toJSONSchema(
+  promptProfileCreateResponseSchema,
+);
+const promptValidationAppendRequest = z.toJSONSchema(
+  promptValidationAppendRequestSchema,
+);
+const promptValidationAppendResponse = z.toJSONSchema(
+  promptValidationAppendResponseSchema,
+);
+const publicPromptList = z.toJSONSchema(publicPromptListSchema);
+const publicPromptDetail = z.toJSONSchema(publicPromptDetailSchema);
+const promptErrorResponse = z.toJSONSchema(promptErrorResponseSchema);
+const invalidPromptRequestResponse = z.toJSONSchema(
+  invalidPromptRequestResponseSchema,
 );
 const entityType = z.toJSONSchema(entityTypeSchema);
 const relationType = z.toJSONSchema(relationTypeSchema);
@@ -249,6 +277,10 @@ const repositoryError = (description: string) => ({
 const productError = (description: string) => ({
   description,
   content: { "application/json": { schema: productErrorResponse } },
+});
+const promptError = (description: string) => ({
+  description,
+  content: { "application/json": { schema: promptErrorResponse } },
 });
 
 export const openApiDocument = {
@@ -930,6 +962,178 @@ export const openApiDocument = {
           },
           401: productError("An authenticated Owner session is required."),
           409: productError("An observation public ID already exists."),
+        },
+      },
+    },
+    "/api/v1/prompts": {
+      get: {
+        summary:
+          "Discover public Prompts by task and verified compatibility without a universal score",
+        parameters: [
+          localeParameter,
+          {
+            name: "task",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              pattern: "^[a-z0-9]+(?:_[a-z0-9]+)*$",
+            },
+          },
+          ...["model", "tool"].map((name) => ({
+            name,
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          })),
+          {
+            name: "rightsStatus",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: [
+                "open",
+                "attribution_required",
+                "source_license",
+                "metadata_only",
+                "link_only",
+              ],
+            },
+          },
+          {
+            name: "validation",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: ["current", "stale", "unvalidated"],
+            },
+          },
+          {
+            name: "limit",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+          },
+          {
+            name: "cursor",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Prompts filtered by task, public rights status and verified Model or Product compatibility. The stable snapshot contains no universal score.",
+            content: { "application/json": { schema: publicPromptList } },
+          },
+          400: {
+            description: "The Prompt list filters or cursor are invalid.",
+            content: {
+              "application/json": { schema: invalidPromptRequestResponse },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/prompts/{publicId}": {
+      get: {
+        summary:
+          "Read one Prompt with provenance, rights, examples and current compatibility evidence",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          localeParameter,
+        ],
+        responses: {
+          200: {
+            description:
+              "A bilingual Prompt profile. Full text appears only when its record-level rights permit redistribution; other records remain metadata-only or link-only.",
+            content: { "application/json": { schema: publicPromptDetail } },
+          },
+          400: {
+            description: "The requested locale is invalid.",
+            content: {
+              "application/json": { schema: invalidPromptRequestResponse },
+            },
+          },
+          404: promptError("The Prompt is not public."),
+        },
+      },
+    },
+    "/api/v1/admin/prompt-profiles": {
+      post: {
+        summary:
+          "Publish one rights-aware Prompt profile with evidenced Model or Product compatibility",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: promptProfileCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "The Prompt profile and its initial compatibility validation observations were published.",
+            content: {
+              "application/json": { schema: promptProfileCreateResponse },
+            },
+          },
+          400: {
+            description:
+              "The request, rights combination, Prompt identity, source or compatibility evidence is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [promptErrorResponse, invalidPromptRequestResponse],
+                },
+              },
+            },
+          },
+          401: promptError("An authenticated Owner session is required."),
+          409: promptError("The Prompt profile already exists."),
+        },
+      },
+    },
+    "/api/v1/admin/prompt-validation-observations": {
+      post: {
+        summary:
+          "Append a compatibility validation observation without replacing stable Prompt identity",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: promptValidationAppendRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "The current validation state was updated by appending immutable evidence.",
+            content: {
+              "application/json": { schema: promptValidationAppendResponse },
+            },
+          },
+          400: {
+            description:
+              "The request, compatibility or source evidence is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [promptErrorResponse, invalidPromptRequestResponse],
+                },
+              },
+            },
+          },
+          401: promptError("An authenticated Owner session is required."),
+          409: promptError("The validation observation already exists."),
         },
       },
     },

@@ -259,6 +259,70 @@ presentation_documents as (
           )
       )
     ))
+    and (document.entity_type is distinct from 'prompt' or exists (
+      select 1 from prompt_profiles profile
+      join source_items profile_source
+        on profile_source.id = profile.source_item_id
+        and profile_source.public_visibility = true
+        and profile_source.rights_status in (
+          'open', 'attribution_required', 'source_license',
+          'metadata_only', 'link_only'
+        )
+      join prompt_localized_contents prompt_localization
+        on prompt_localization.prompt_profile_id = profile.id
+        and prompt_localization.locale = $3::content_locale
+        and prompt_localization.review_status = 'reviewed'
+        and prompt_localization.public_visibility = true
+      join prompt_compatibilities compatibility
+        on compatibility.prompt_profile_id = profile.id
+        and compatibility.public_visibility = true
+      join entities target on target.id = compatibility.target_entity_id
+        and target.type in ('model', 'product')
+        and target.lifecycle_status = 'active'
+        and target.public_visibility = true
+      join entity_localized_contents target_localization
+        on target_localization.entity_id = target.id
+        and target_localization.locale = $3::content_locale
+        and target_localization.review_status = 'reviewed'
+        and target_localization.public_visibility = true
+      join lateral (
+        select 1
+        from lateral (
+          select observation.source_item_id
+          from prompt_validation_observations observation
+          where observation.compatibility_id = compatibility.id
+            and observation.public_visibility = true
+          order by observation.observed_at desc, observation.public_id desc
+          limit 1
+        ) latest_validation
+        join source_items validation_source
+          on validation_source.id = latest_validation.source_item_id
+          and validation_source.public_visibility = true
+          and validation_source.rights_status in (
+            'open', 'attribution_required', 'source_license',
+            'metadata_only', 'link_only'
+          )
+      ) validation on true
+      join relations relation on relation.subject_entity_id = document.object_id
+        and relation.object_entity_id = target.id
+        and relation.predicate = 'WORKS_WITH'
+        and relation.review_status = 'reviewed'
+        and relation.public_visibility = true
+      join relation_evidence evidence on evidence.relation_id = relation.id
+      join source_items relation_source
+        on relation_source.id = evidence.source_item_id
+        and relation_source.public_visibility = true
+        and relation_source.rights_status in (
+          'open', 'attribution_required', 'source_license',
+          'metadata_only', 'link_only'
+        )
+      where profile.entity_id = document.object_id
+        and profile.public_visibility = true
+        and profile.rights_status in (
+          'open', 'attribution_required', 'source_license',
+          'metadata_only', 'link_only'
+        )
+    ))
 ),
 matches as (
   select term.object_kind::text as kind, term.object_id,
@@ -667,6 +731,70 @@ const hydrateSnapshotItems = async (
               where evidence.relation_id = ownership.id
             )
         )
+      ))
+      and (document.entity_type is distinct from 'prompt' or exists (
+        select 1 from prompt_profiles profile
+        join source_items profile_source
+          on profile_source.id = profile.source_item_id
+          and profile_source.public_visibility = true
+          and profile_source.rights_status in (
+            'open', 'attribution_required', 'source_license',
+            'metadata_only', 'link_only'
+          )
+        join prompt_localized_contents prompt_localization
+          on prompt_localization.prompt_profile_id = profile.id
+          and prompt_localization.locale = $1::content_locale
+          and prompt_localization.review_status = 'reviewed'
+          and prompt_localization.public_visibility = true
+        join prompt_compatibilities compatibility
+          on compatibility.prompt_profile_id = profile.id
+          and compatibility.public_visibility = true
+        join entities target on target.id = compatibility.target_entity_id
+          and target.type in ('model', 'product')
+          and target.lifecycle_status = 'active'
+          and target.public_visibility = true
+        join entity_localized_contents target_localization
+          on target_localization.entity_id = target.id
+          and target_localization.locale = $1::content_locale
+          and target_localization.review_status = 'reviewed'
+          and target_localization.public_visibility = true
+        join lateral (
+          select 1
+          from lateral (
+            select observation.source_item_id
+            from prompt_validation_observations observation
+            where observation.compatibility_id = compatibility.id
+              and observation.public_visibility = true
+            order by observation.observed_at desc, observation.public_id desc
+            limit 1
+          ) latest_validation
+          join source_items validation_source
+            on validation_source.id = latest_validation.source_item_id
+            and validation_source.public_visibility = true
+            and validation_source.rights_status in (
+              'open', 'attribution_required', 'source_license',
+              'metadata_only', 'link_only'
+            )
+        ) validation on true
+        join relations relation on relation.subject_entity_id = document.object_id
+          and relation.object_entity_id = target.id
+          and relation.predicate = 'WORKS_WITH'
+          and relation.review_status = 'reviewed'
+          and relation.public_visibility = true
+        join relation_evidence evidence on evidence.relation_id = relation.id
+        join source_items relation_source
+          on relation_source.id = evidence.source_item_id
+          and relation_source.public_visibility = true
+          and relation_source.rights_status in (
+            'open', 'attribution_required', 'source_license',
+            'metadata_only', 'link_only'
+          )
+        where profile.entity_id = document.object_id
+          and profile.public_visibility = true
+          and profile.rights_status in (
+            'open', 'attribution_required', 'source_license',
+            'metadata_only', 'link_only'
+          )
       ))`,
     [input.locale, publicIds, normalizeSearchText(input.q), input.q],
   );

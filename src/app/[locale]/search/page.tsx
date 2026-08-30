@@ -258,7 +258,9 @@ export default async function SearchPage({
                   ? `/${locale}/models/${item.publicId}`
                   : item.entityType === "product"
                     ? `/${locale}/products/${item.publicId}`
-                    : `/${locale}/entities/${item.publicId}`;
+                    : item.entityType === "prompt"
+                      ? `/${locale}/prompts/${item.publicId}`
+                      : `/${locale}/entities/${item.publicId}`;
             const match = `${labels.matchReason[item.matchReason]} · ${labels.language[item.matchedLocale]}`;
             const crossLanguageAlias =
               item.matchReason === "alias" && item.matchedLocale !== locale
