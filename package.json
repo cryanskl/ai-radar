@@ -13,7 +13,7 @@
     "dev:worker": "tsx src/worker/index.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "build": "next build",
+    "build": "rm -rf .next/dev && next build",
     "start:web": "next start",
     "start:worker": "tsx src/worker/index.ts",
     "lint": "eslint .",
