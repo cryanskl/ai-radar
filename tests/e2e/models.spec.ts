@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
+import { Client } from "pg";
 import { completeFakeGithubOAuth } from "../support/github-oauth";
 import {
   startTestApplication,
@@ -27,6 +28,35 @@ test("publishes distinct Model families and versions with sourced prices and Ben
 
   const unauthorized = await context.request.post(profileUrl, { data: {} });
   expect(unauthorized.status()).toBe(401);
+
+  const recommendationParameters = new URLSearchParams({
+    locale: "en",
+    task: "coding",
+    benchmarkPublicId: "benchmark-code-suite",
+    benchmarkVersion: "1.0",
+    scoreUnit: "percent",
+    qualityThreshold: "65",
+    qualityDirection: "at_least",
+    priceCategory: "output_tokens",
+    priceUnit: "per_million_tokens",
+    currency: "USD",
+    region: "global",
+    maximumUnitPrice: "12",
+    deployment: "hosted_api",
+    requireOpenWeights: "false",
+    maximumLatencyMs: "200",
+    latencyBenchmarkPublicId: "benchmark-latency-suite",
+    latencyBenchmarkVersion: "1.0",
+  });
+  const emptyRecommendation = await context.request.get(
+    `${applicationUrl}/api/v1/model-recommendations?${recommendationParameters}`,
+  );
+  expect(emptyRecommendation.status()).toBe(200);
+  expect(await emptyRecommendation.json()).toMatchObject({
+    status: "insufficient_evidence",
+    dataCutoff: null,
+    candidates: [],
+  });
 
   const owner = await completeFakeGithubOAuth({
     applicationUrl,
@@ -142,6 +172,15 @@ test("publishes distinct Model families and versions with sourced prices and Ben
     zhSummary: "一个版本化的代码评测基准。",
   });
   await createEntity({
+    publicId: "benchmark-latency-suite",
+    type: "benchmark",
+    officialName: "Latency Suite",
+    enName: "Latency Suite",
+    enSummary: "A versioned model latency benchmark.",
+    zhName: "时延评测套件",
+    zhSummary: "一个版本化的模型时延评测基准。",
+  });
+  await createEntity({
     publicId: "model-radar-one",
     type: "model",
     officialName: "Radar One",
@@ -186,6 +225,21 @@ test("publishes distinct Model families and versions with sourced prices and Ben
         releasedAtPrecision: "second",
       },
     ],
+  });
+  await createEntity({
+    publicId: "model-recall-boundary",
+    type: "model",
+    officialName: "Recall Boundary Model",
+    enName: "Recall Boundary Model",
+    enSummary: "A family that proves evidence-qualified candidate recall.",
+    zhName: "召回边界模型",
+    zhSummary: "用于证明按证据资格召回候选的模型家族。",
+    versions: Array.from({ length: 10 }, (_, index) => ({
+      publicId: `model-recall-boundary-v${index + 1}`,
+      versionLabel: `v${index + 1}`,
+      releasedAt: `2026-08-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
+      releasedAtPrecision: "second" as const,
+    })),
   });
 
   const createEvidenceEvent = async ({
@@ -347,7 +401,7 @@ test("publishes distinct Model families and versions with sourced prices and Ben
       inputModalities: ["text"],
       outputModalities: ["text"],
       contextWindowTokens: 128000,
-      accessMethods: ["hosted_api"],
+      accessMethods: ["hosted_api", "self_hosted", "open_weights"],
       regions: ["global", "us"],
       priceRecords: [
         {
@@ -503,6 +557,23 @@ test("publishes distinct Model families and versions with sourced prices and Ben
           confidence: 95,
           lastVerifiedAt: "2026-08-30T08:00:00.000Z",
         },
+        {
+          publicId: "benchmark-run-radar-one-latency",
+          benchmarkPublicId: "benchmark-latency-suite",
+          benchmarkVersion: "1.0",
+          task: "latency",
+          score: "180.00000000",
+          unit: "ms",
+          higherIsBetter: false,
+          settings: { concurrency: 1 },
+          evaluatorPublicId: "organization-independent-evaluator",
+          provenance: "independent_reproduced",
+          runAt: "2026-08-25T00:00:00.000Z",
+          evidenceSourceItemPublicId: "source-item-radar-one-independent",
+          reproducibility: "reproduced",
+          confidence: 95,
+          lastVerifiedAt: "2026-08-30T08:00:00.000Z",
+        },
       ],
     },
   });
@@ -557,18 +628,143 @@ test("publishes distinct Model families and versions with sourced prices and Ben
           unit: "percent",
           higherIsBetter: true,
           settings: { temperature: 0, maxTokens: 4096 },
-          evaluatorPublicId: "organization-model-provider",
-          provenance: "vendor_reported",
+          evaluatorPublicId: "organization-independent-evaluator",
+          provenance: "independent_reproduced",
           runAt: "2026-08-29T00:00:00.000Z",
-          evidenceSourceItemPublicId: "source-item-radar-one-official",
-          reproducibility: "reported_only",
-          confidence: 80,
+          evidenceSourceItemPublicId: "source-item-radar-one-independent",
+          reproducibility: "reproduced",
+          confidence: 95,
           lastVerifiedAt: "2026-08-30T08:00:00.000Z",
         },
       ],
     },
   });
   expect(incompleteProfile.status()).toBe(201);
+
+  for (let index = 1; index <= 10; index += 1) {
+    const hasLatencyEvidence = index === 1 || index >= 6;
+    const price = index === 1 ? "3.00000000" : "4.00000000";
+    const quality = index === 1 ? "82.00000000" : `${96 - index}.00000000`;
+    const recallProfile = await context.request.post(profileUrl, {
+      data: {
+        familyPublicId: "model-recall-boundary",
+        versionPublicId: `model-recall-boundary-v${index}`,
+        providerPublicId: "organization-model-provider",
+        lifecycleStatus: "active",
+        inputModalities: ["text"],
+        outputModalities: ["text"],
+        contextWindowTokens: 128000,
+        accessMethods: ["hosted_api"],
+        regions: ["global"],
+        priceRecords: [
+          {
+            publicId: `price-recall-boundary-v${index}`,
+            category: "output_tokens",
+            amount: price,
+            currency: "USD",
+            unit: "per_million_tokens",
+            region: "global",
+            taxPolicy: "exclusive",
+            validFrom: "2026-08-01T00:00:00.000Z",
+            validTo: null,
+            sourceItemPublicId: "source-item-radar-one-official",
+            lastVerifiedAt: "2026-08-30T08:00:00.000Z",
+          },
+        ],
+        benchmarkRuns: [
+          {
+            publicId: `benchmark-run-recall-boundary-quality-v${index}`,
+            benchmarkPublicId: "benchmark-code-suite",
+            benchmarkVersion: "1.0",
+            task: "coding",
+            score: quality,
+            unit: "percent",
+            higherIsBetter: true,
+            settings: { temperature: 0, maxTokens: 4096 },
+            evaluatorPublicId: "organization-independent-evaluator",
+            provenance: "independent_reproduced",
+            runAt: "2026-08-25T00:00:00.000Z",
+            evidenceSourceItemPublicId: "source-item-radar-one-independent",
+            reproducibility: "reproduced",
+            confidence: 95,
+            lastVerifiedAt: "2026-08-30T08:00:00.000Z",
+          },
+          ...(hasLatencyEvidence
+            ? [
+                {
+                  publicId: `benchmark-run-recall-boundary-latency-v${index}`,
+                  benchmarkPublicId: "benchmark-latency-suite",
+                  benchmarkVersion: "1.0",
+                  task: "latency",
+                  score: "150.00000000",
+                  unit: "ms",
+                  higherIsBetter: false,
+                  settings: { concurrency: 1 },
+                  evaluatorPublicId: "organization-independent-evaluator",
+                  provenance: "independent_reproduced",
+                  runAt: "2026-08-25T00:00:00.000Z",
+                  evidenceSourceItemPublicId:
+                    "source-item-radar-one-independent",
+                  reproducibility: "reproduced",
+                  confidence: 95,
+                  lastVerifiedAt: "2026-08-30T08:00:00.000Z",
+                },
+              ]
+            : []),
+        ],
+      },
+    });
+    expect(recallProfile.status()).toBe(201);
+  }
+
+  const automaticRecommendation = await context.request.get(
+    `${applicationUrl}/api/v1/model-recommendations?${recommendationParameters}`,
+  );
+  expect(automaticRecommendation.status()).toBe(200);
+  const automaticRecommendationBody = await automaticRecommendation.json();
+  expect(automaticRecommendationBody).toMatchObject({
+    status: "available",
+  });
+  expect(automaticRecommendationBody.candidates[0]).toMatchObject({
+    versionPublicId: "model-recall-boundary-v1",
+    outcome: "fit",
+    rank: 1,
+  });
+  expect(
+    automaticRecommendationBody.candidates.map(
+      ({ versionPublicId }: { versionPublicId: string }) => versionPublicId,
+    ),
+  ).toContain("model-recall-boundary-v6");
+
+  const repeatedAutomaticRecommendation = await context.request.get(
+    `${applicationUrl}/api/v1/model-recommendations?${recommendationParameters}`,
+  );
+  expect((await repeatedAutomaticRecommendation.json()).dataCutoff).toBe(
+    automaticRecommendationBody.dataCutoff,
+  );
+
+  const databaseClient = new Client({
+    connectionString: application.databaseUrl,
+  });
+  await databaseClient.connect();
+  await databaseClient.query(
+    `update price_records
+     set last_verified_at = $2
+     where public_id = $1`,
+    [
+      "price-recall-boundary-v1",
+      new Date(
+        Date.parse(automaticRecommendationBody.dataCutoff) + 1,
+      ).toISOString(),
+    ],
+  );
+  await databaseClient.end();
+  const refreshedAutomaticRecommendation = await context.request.get(
+    `${applicationUrl}/api/v1/model-recommendations?${recommendationParameters}`,
+  );
+  expect(
+    Date.parse((await refreshedAutomaticRecommendation.json()).dataCutoff),
+  ).toBeGreaterThan(Date.parse(automaticRecommendationBody.dataCutoff));
 
   const beforeTimeline = await context.request.get(
     `${applicationUrl}/api/v1/models?locale=zh&provider=organization-model-provider&modality=image&access=hosted_api&region=global`,
@@ -683,6 +879,7 @@ test("publishes distinct Model families and versions with sourced prices and Ben
         ],
         benchmarkRuns: [
           { provenance: "independent_reproduced" },
+          { provenance: "independent_reproduced" },
           { provenance: "vendor_reported" },
         ],
       },
@@ -742,6 +939,167 @@ test("publishes distinct Model families and versions with sourced prices and Ben
     },
     lastVerifiedAt: "2026-08-30T08:00:00.000Z",
   });
+
+  recommendationParameters.set(
+    "versions",
+    "model-radar-one-2026-08,model-radar-one-2026-09",
+  );
+  const recommendation = await context.request.get(
+    `${applicationUrl}/api/v1/model-recommendations?${recommendationParameters}`,
+  );
+  expect(recommendation.status()).toBe(200);
+  const recommendationBody = await recommendation.json();
+  expect(recommendationBody).toMatchObject({
+    status: "available",
+    methodology: { publicId: "model-configuration-fit", version: "1.0.0" },
+    candidates: [
+      {
+        versionPublicId: "model-radar-one-2026-08",
+        outcome: "fit",
+        rank: 1,
+        priceEvidence: { publicId: "price-radar-one-output" },
+        qualityEvidence: {
+          publicId: "benchmark-run-radar-one-independent",
+        },
+        latencyEvidence: { publicId: "benchmark-run-radar-one-latency" },
+      },
+      {
+        versionPublicId: "model-radar-one-2026-09",
+        outcome: "insufficient_evidence",
+        rank: null,
+      },
+    ],
+  });
+
+  const invalidComparisonParameters = new URLSearchParams(
+    recommendationParameters,
+  );
+  invalidComparisonParameters.set("priceCategory", "image");
+  const invalidComparison = await context.request.get(
+    `${applicationUrl}/api/v1/model-recommendations?${invalidComparisonParameters}`,
+  );
+  expect(invalidComparison.status()).toBe(200);
+  const invalidComparisonBody = await invalidComparison.json();
+  expect(invalidComparisonBody.status).toBe("not_comparable");
+  expect(invalidComparisonBody.candidates[0]).toMatchObject({
+    outcome: "not_comparable",
+    nonFitReasons: [
+      expect.objectContaining({ code: "price_unit_incompatible" }),
+    ],
+  });
+
+  const selfHostedParameters = new URLSearchParams(recommendationParameters);
+  selfHostedParameters.set("deployment", "self_hosted");
+  selfHostedParameters.set("requireOpenWeights", "true");
+  selfHostedParameters.set("versions", "model-radar-one-2026-08");
+  const selfHostedComparison = await context.request.get(
+    `${applicationUrl}/api/v1/model-recommendations?${selfHostedParameters}`,
+  );
+  expect(selfHostedComparison.status()).toBe(200);
+  expect(await selfHostedComparison.json()).toMatchObject({
+    status: "not_comparable",
+    candidates: [
+      expect.objectContaining({
+        outcome: "not_comparable",
+        priceEvidence: null,
+        nonFitReasons: [
+          expect.objectContaining({ code: "deployment_cost_basis_missing" }),
+        ],
+      }),
+    ],
+  });
+
+  const noEvidenceParameters = new URLSearchParams(recommendationParameters);
+  noEvidenceParameters.set("versions", "model-unprofiled-v1");
+  const noEvidence = await context.request.get(
+    `${applicationUrl}/api/v1/model-recommendations?${noEvidenceParameters}`,
+  );
+  expect(noEvidence.status()).toBe(200);
+  const noEvidenceBody = await noEvidence.json();
+  expect(noEvidenceBody).toMatchObject({
+    status: "insufficient_evidence",
+    candidates: [
+      expect.objectContaining({
+        versionPublicId: "model-unprofiled-v1",
+        outcome: "insufficient_evidence",
+      }),
+    ],
+  });
+
+  await page.goto(
+    `${applicationUrl}/en/models/compare?${recommendationParameters}`,
+  );
+  await expect(
+    page.getByRole("heading", { name: "Model configuration fit", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Recommendation available", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Radar One 2026-08", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Current Output tokens price", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.locator("p").filter({ hasText: "Data Cutoff:" }),
+  ).toBeVisible();
+
+  const chineseRecommendationParameters = new URLSearchParams(
+    recommendationParameters,
+  );
+  chineseRecommendationParameters.set("locale", "zh");
+  await page.goto(
+    `${applicationUrl}/zh/models/compare?${chineseRecommendationParameters}`,
+  );
+  await expect(
+    page.getByRole("heading", { name: "模型配置匹配", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("推荐可用", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("term").filter({ hasText: "质量门槛" }),
+  ).toBeVisible();
+  await expect(
+    page.locator("p").filter({ hasText: "当前 输出 Token 价格" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("term").filter({ hasText: "价格地区" }),
+  ).toBeVisible();
+  await expect(page.getByText("未含税", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("term").filter({ hasText: "生效时间" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "适合原因", exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "方法 1.0.0", exact: true }),
+  ).toBeVisible();
+
+  await page.goto(
+    `${applicationUrl}/en/models/compare?${invalidComparisonParameters}`,
+  );
+  await expect(
+    page.getByRole("heading", { name: "Not comparable", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByText("The selected price category and unit are not comparable.", {
+        exact: true,
+      })
+      .first(),
+  ).toBeVisible();
+
+  noEvidenceParameters.set("locale", "zh");
+  await page.goto(
+    `${applicationUrl}/zh/models/compare?${noEvidenceParameters}`,
+  );
+  await expect(
+    page.getByRole("heading", { name: "证据不足", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("缺少完整的公开配置档案。", { exact: true }),
+  ).toBeVisible();
 
   const versionDetail = await context.request.get(
     `${applicationUrl}/api/v1/model-versions/model-radar-one-2026-08?locale=en`,
@@ -803,7 +1161,9 @@ test("publishes distinct Model families and versions with sourced prices and Ben
     "href",
     "/zh/models/model-radar-one/versions/model-radar-one-2026-08",
   );
-  await expect(page.getByText("独立复现", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("独立复现", { exact: true }).first(),
+  ).toBeVisible();
   await expect(
     page.getByText("厂商自报", { exact: true }).first(),
   ).toBeVisible();
@@ -821,7 +1181,9 @@ test("publishes distinct Model families and versions with sourced prices and Ben
   await expect(page.getByText("音频", { exact: true })).toBeVisible();
   await expect(page.getByText("视频", { exact: true })).toBeVisible();
   await expect(
-    page.getByText("运行日期: 2026-08-25T00:00:00.000Z", { exact: true }),
+    page
+      .getByText("运行日期: 2026-08-25T00:00:00.000Z", { exact: true })
+      .first(),
   ).toBeVisible();
 
   await page.goto(
@@ -848,10 +1210,14 @@ test("publishes distinct Model families and versions with sourced prices and Ben
     page.getByText("Task: coding", { exact: true }).first(),
   ).toBeVisible();
   await expect(
-    page.getByText("Run date: 2026-08-25T00:00:00.000Z", { exact: true }),
+    page
+      .getByText("Run date: 2026-08-25T00:00:00.000Z", { exact: true })
+      .first(),
   ).toBeVisible();
   await expect(
-    page.getByText("Provenance: Independent reproduced", { exact: true }),
+    page
+      .getByText("Provenance: Independent reproduced", { exact: true })
+      .first(),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Related Entities", exact: true }),
@@ -881,10 +1247,27 @@ test("publishes distinct Model families and versions with sourced prices and Ben
   const openApi = await openApiResponse.json();
   const ajv = new Ajv2020({ strict: false });
   addFormats(ajv);
+  const recommendationParameterSchema = (name: string) =>
+    openApi.paths["/api/v1/model-recommendations"].get.parameters.find(
+      (parameter: { name: string }) => parameter.name === name,
+    ).schema;
+  const validateQualityThreshold = ajv.compile(
+    recommendationParameterSchema("qualityThreshold"),
+  );
+  const validateMaximumUnitPrice = ajv.compile(
+    recommendationParameterSchema("maximumUnitPrice"),
+  );
+  expect(validateQualityThreshold("-999999999999.99999999")).toBe(true);
+  expect(validateQualityThreshold("1e3")).toBe(false);
+  expect(validateMaximumUnitPrice("999999999999.99999999")).toBe(true);
+  expect(validateMaximumUnitPrice("-1")).toBe(false);
   for (const [path, body] of [
     ["/api/v1/models", modelListBody],
     ["/api/v1/models/{publicId}", modelDetailBody],
     ["/api/v1/model-versions/{publicId}", versionDetailBody],
+    ["/api/v1/model-recommendations", recommendationBody],
+    ["/api/v1/model-recommendations", invalidComparisonBody],
+    ["/api/v1/model-recommendations", noEvidenceBody],
   ] as const) {
     const validate = ajv.compile(
       openApi.paths[path].get.responses["200"].content["application/json"]

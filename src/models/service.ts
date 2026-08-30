@@ -11,13 +11,19 @@ import {
 } from "@/db/schema";
 import { getPublicEntity } from "@/entities/service";
 import {
+  type ModelRecommendationRequest,
   publicModelDetailSchema,
   publicModelListSchema,
+  publicModelRecommendationSchema,
   publicModelVersionDetailSchema,
   type ModelListRequest,
   type ModelVersionProfileCreateRequest,
   type PublicModelDetail,
 } from "./contracts";
+import {
+  evaluateModelRecommendations,
+  type RecommendationCandidate,
+} from "./recommendation";
 
 export const createModelVersionProfile = async (
   input: ModelVersionProfileCreateRequest,
@@ -756,4 +762,247 @@ export const getPublicModelVersion = async (
       timeline: family.timeline,
     },
   });
+};
+
+export const recommendPublicModels = async (
+  input: ModelRecommendationRequest,
+) => {
+  const candidateRows = await databasePool.query<{
+    family_public_id: string;
+    version_public_id: string;
+    selection_cutoff: Date;
+  }>(
+    `with parameters as (
+       select statement_timestamp() as selection_cutoff
+     ), candidate_pool as (
+     select family.public_id as family_public_id,
+      version.public_id as version_public_id, version.released_at,
+      parameters.selection_cutoff, current_price.amount as comparable_price,
+      quality_evidence.score as comparable_quality,
+      coalesce((
+        $1::text[] is null
+        and $2::text = 'hosted_api'
+        and provider.public_id is not null
+        and current_price.record_count = 1
+        and current_price.amount <= $9::numeric
+        and quality_evidence.score is not null
+        and case when $14::boolean
+          then quality_evidence.score >= $15::numeric
+          else quality_evidence.score <= $15::numeric
+        end
+        and ($16::numeric is null
+          or latency_evidence.score <= $16::numeric)
+      ), false) as fit_eligible
+     from entity_versions version
+     join entities family on family.id = version.entity_id
+     join entity_localized_contents family_localization
+       on family_localization.entity_id = family.id
+       and family_localization.locale = $5::content_locale
+       and family_localization.review_status = 'reviewed'
+       and family_localization.public_visibility = true
+     left join model_version_profiles profile
+       on profile.entity_version_id = version.id
+       and profile.public_visibility = true
+     left join entities provider
+       on provider.id = profile.provider_entity_id
+       and provider.type = 'organization'
+       and provider.lifecycle_status = 'active'
+       and provider.public_visibility = true
+     left join entity_localized_contents provider_localization
+       on provider_localization.entity_id = provider.id
+       and provider_localization.locale = $5::content_locale
+       and provider_localization.review_status = 'reviewed'
+       and provider_localization.public_visibility = true
+     cross join parameters
+     left join lateral (
+       select count(*)::integer as record_count, min(price.amount) as amount
+       from price_records price
+       join source_items evidence
+         on evidence.id = price.source_item_id
+         and evidence.public_visibility = true
+       where price.entity_version_id = version.id
+         and price.public_visibility = true
+         and price.category::text = $6
+         and price.unit::text = $7
+         and price.currency = $8
+         and price.region = $3
+         and price.valid_from <= parameters.selection_cutoff
+         and (price.valid_to is null
+           or price.valid_to >= parameters.selection_cutoff)
+     ) current_price on true
+     left join lateral (
+       select run.score
+       from benchmark_runs run
+       join entities benchmark
+         on benchmark.id = run.benchmark_entity_id
+         and benchmark.type = 'benchmark'
+         and benchmark.lifecycle_status = 'active'
+         and benchmark.public_visibility = true
+       join entity_localized_contents benchmark_localization
+         on benchmark_localization.entity_id = benchmark.id
+         and benchmark_localization.locale = $5::content_locale
+         and benchmark_localization.review_status = 'reviewed'
+         and benchmark_localization.public_visibility = true
+       join entities evaluator
+         on evaluator.id = run.evaluator_entity_id
+         and evaluator.type = 'organization'
+         and evaluator.lifecycle_status = 'active'
+         and evaluator.public_visibility = true
+       join entity_localized_contents evaluator_localization
+         on evaluator_localization.entity_id = evaluator.id
+         and evaluator_localization.locale = $5::content_locale
+         and evaluator_localization.review_status = 'reviewed'
+         and evaluator_localization.public_visibility = true
+       join source_items evidence
+         on evidence.id = run.evidence_source_item_id
+         and evidence.public_visibility = true
+       where run.entity_version_id = version.id
+         and run.public_visibility = true
+         and benchmark.public_id = $10
+         and run.benchmark_version = $11
+         and run.task = $12 and run.unit = $13
+         and run.higher_is_better = $14
+         and run.run_at <= parameters.selection_cutoff
+       order by case run.provenance
+         when 'independent_reproduced' then 0
+         when 'independent_reported' then 1
+         when 'vendor_reported' then 2
+         else 3
+       end, run.confidence desc, run.run_at desc, run.public_id
+       limit 1
+     ) quality_evidence on true
+     left join lateral (
+       select run.score
+       from benchmark_runs run
+       join entities benchmark
+         on benchmark.id = run.benchmark_entity_id
+         and benchmark.type = 'benchmark'
+         and benchmark.lifecycle_status = 'active'
+         and benchmark.public_visibility = true
+       join entity_localized_contents benchmark_localization
+         on benchmark_localization.entity_id = benchmark.id
+         and benchmark_localization.locale = $5::content_locale
+         and benchmark_localization.review_status = 'reviewed'
+         and benchmark_localization.public_visibility = true
+       join entities evaluator
+         on evaluator.id = run.evaluator_entity_id
+         and evaluator.type = 'organization'
+         and evaluator.lifecycle_status = 'active'
+         and evaluator.public_visibility = true
+       join entity_localized_contents evaluator_localization
+         on evaluator_localization.entity_id = evaluator.id
+         and evaluator_localization.locale = $5::content_locale
+         and evaluator_localization.review_status = 'reviewed'
+         and evaluator_localization.public_visibility = true
+       join source_items evidence
+         on evidence.id = run.evidence_source_item_id
+         and evidence.public_visibility = true
+       where run.entity_version_id = version.id
+         and run.public_visibility = true
+         and benchmark.public_id = $17
+         and run.benchmark_version = $18
+         and run.task = 'latency' and run.unit = 'ms'
+         and run.higher_is_better = false
+         and run.run_at <= parameters.selection_cutoff
+       order by case run.provenance
+         when 'independent_reproduced' then 0
+         when 'independent_reported' then 1
+         when 'vendor_reported' then 2
+         else 3
+       end, run.confidence desc, run.run_at desc, run.public_id
+       limit 1
+     ) latency_evidence on $16::numeric is not null
+     where family.type = 'model' and family.lifecycle_status = 'active'
+       and family.public_visibility = true
+       and version.public_visibility = true
+       and (
+         ($1::text[] is not null and version.public_id = any($1::text[]))
+         or (
+           $1::text[] is null
+           and profile.lifecycle_status = 'active'
+           and provider_localization.name is not null
+           and $2::text = any(profile.access_methods::text[])
+           and $3::text = any(profile.regions)
+           and (not $4::boolean
+             or 'open_weights' = any(profile.access_methods::text[]))
+         )
+       )
+     )
+     select family_public_id, version_public_id, selection_cutoff
+     from candidate_pool
+     order by fit_eligible desc nulls last,
+       comparable_price asc nulls last,
+       case when fit_eligible and $14::boolean
+         then comparable_quality end desc nulls last,
+       case when fit_eligible and not $14::boolean
+         then comparable_quality end asc nulls last,
+       case when not fit_eligible then released_at end desc nulls last,
+       version_public_id
+     limit 4`,
+    [
+      input.versionPublicIds ?? null,
+      input.deployment,
+      input.region,
+      input.requireOpenWeights,
+      input.locale,
+      input.priceCategory,
+      input.priceUnit,
+      input.currency,
+      input.maximumUnitPrice,
+      input.benchmarkPublicId,
+      input.benchmarkVersion,
+      input.task,
+      input.scoreUnit,
+      input.qualityDirection === "at_least",
+      input.qualityThreshold,
+      input.maximumLatencyMs ?? null,
+      input.latencyBenchmarkPublicId ?? null,
+      input.latencyBenchmarkVersion ?? null,
+    ],
+  );
+  const familyPublicIds = [
+    ...new Set(
+      candidateRows.rows.map(({ family_public_id }) => family_public_id),
+    ),
+  ];
+  const details = (
+    await Promise.all(
+      familyPublicIds.map((publicId) => getPublicModel(publicId, input.locale)),
+    )
+  ).filter((detail): detail is PublicModelDetail => detail !== null);
+  const selectedVersionPublicIds = new Set(
+    candidateRows.rows.map(({ version_public_id }) => version_public_id),
+  );
+  const candidates: RecommendationCandidate[] = details.flatMap((family) =>
+    family.versions.flatMap((version) =>
+      !selectedVersionPublicIds.has(version.publicId)
+        ? []
+        : [
+            {
+              family: {
+                publicId: family.publicId,
+                name: family.name,
+                summary: family.summary,
+              },
+              version,
+            },
+          ],
+    ),
+  );
+  const dataCutoff =
+    details.length === 0
+      ? null
+      : new Date(
+          Math.max(...details.map(({ dataCutoff }) => Date.parse(dataCutoff))),
+        ).toISOString();
+  const evaluationInstant =
+    candidateRows.rows[0]?.selection_cutoff.toISOString() ?? null;
+  return publicModelRecommendationSchema.parse(
+    evaluateModelRecommendations(
+      input,
+      candidates,
+      dataCutoff,
+      evaluationInstant,
+    ),
+  );
 };

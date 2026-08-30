@@ -7,6 +7,7 @@ import { listPublicModels } from "@/models/service";
 const copy = {
   en: {
     heading: "Models",
+    compare: "Compare and configure",
     empty: "No public Model profiles match these filters.",
     latest: "Latest version",
     evidence: {
@@ -16,6 +17,7 @@ const copy = {
   },
   zh: {
     heading: "模型",
+    compare: "比较与配置推荐",
     empty: "没有符合筛选条件的公开模型档案。",
     latest: "最新版本",
     evidence: {
@@ -46,6 +48,9 @@ export default async function ModelsPage({
   return (
     <main lang={locale.data}>
       <h1>{labels.heading}</h1>
+      <p>
+        <Link href={`/${locale.data}/models/compare`}>{labels.compare}</Link>
+      </p>
       {result.items.length === 0 ? <p>{labels.empty}</p> : null}
       <ol>
         {result.items.map((model) => (

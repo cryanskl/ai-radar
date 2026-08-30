@@ -58,6 +58,7 @@ import {
   modelVersionProfileCreateResponseSchema,
   publicModelDetailSchema,
   publicModelListSchema,
+  publicModelRecommendationSchema,
   publicModelVersionDetailSchema,
 } from "@/models/contracts";
 
@@ -134,6 +135,9 @@ const modelVersionProfileCreateResponse = z.toJSONSchema(
 const publicModelList = z.toJSONSchema(publicModelListSchema);
 const publicModelDetail = z.toJSONSchema(publicModelDetailSchema);
 const publicModelVersionDetail = z.toJSONSchema(publicModelVersionDetailSchema);
+const publicModelRecommendation = z.toJSONSchema(
+  publicModelRecommendationSchema,
+);
 const modelErrorResponse = z.toJSONSchema(modelErrorResponseSchema);
 const invalidModelRequestResponse = z.toJSONSchema(
   invalidModelRequestResponseSchema,
@@ -382,6 +386,164 @@ export const openApiDocument = {
           },
           400: modelError("The requested locale is invalid."),
           404: modelError("The Model family is not public."),
+        },
+      },
+    },
+    "/api/v1/model-recommendations": {
+      get: {
+        summary:
+          "Compare exact Model Versions under explicit quality, cost, latency and deployment constraints",
+        parameters: [
+          localeParameter,
+          {
+            name: "task",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "benchmarkPublicId",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "benchmarkVersion",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "scoreUnit",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "qualityThreshold",
+            in: "query",
+            required: true,
+            schema: {
+              type: "string",
+              pattern: "^-?\\d{1,12}(?:\\.\\d{1,8})?$",
+            },
+          },
+          {
+            name: "qualityDirection",
+            in: "query",
+            required: true,
+            schema: { type: "string", enum: ["at_least", "at_most"] },
+          },
+          {
+            name: "priceCategory",
+            in: "query",
+            required: true,
+            schema: {
+              type: "string",
+              enum: [
+                "input_tokens",
+                "output_tokens",
+                "cached_input_tokens",
+                "cached_output_tokens",
+                "batch_input_tokens",
+                "batch_output_tokens",
+                "image",
+                "audio",
+                "video",
+              ],
+            },
+          },
+          {
+            name: "priceUnit",
+            in: "query",
+            required: true,
+            schema: {
+              type: "string",
+              enum: [
+                "per_million_tokens",
+                "per_image",
+                "per_minute",
+                "per_second",
+              ],
+            },
+          },
+          {
+            name: "currency",
+            in: "query",
+            required: true,
+            schema: { type: "string", pattern: "^[A-Z]{3}$" },
+          },
+          {
+            name: "region",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "maximumUnitPrice",
+            in: "query",
+            required: true,
+            schema: {
+              type: "string",
+              pattern: "^\\d{1,12}(?:\\.\\d{1,8})?$",
+            },
+          },
+          {
+            name: "deployment",
+            in: "query",
+            required: true,
+            schema: {
+              type: "string",
+              enum: ["hosted_api", "open_weights", "self_hosted"],
+            },
+          },
+          {
+            name: "requireOpenWeights",
+            in: "query",
+            required: true,
+            schema: { type: "string", enum: ["true", "false"] },
+          },
+          {
+            name: "maximumLatencyMs",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 1 },
+          },
+          {
+            name: "latencyBenchmarkPublicId",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+          {
+            name: "latencyBenchmarkVersion",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+          {
+            name: "versions",
+            in: "query",
+            required: false,
+            description:
+              "One to four comma-separated exact Model Version public IDs.",
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "A bounded recommendation, Not Comparable result or Insufficient Evidence result with exact supporting records and Data Cutoff.",
+            content: {
+              "application/json": { schema: publicModelRecommendation },
+            },
+          },
+          400: {
+            description: "The Model recommendation constraints are invalid.",
+            content: {
+              "application/json": { schema: invalidModelRequestResponse },
+            },
+          },
         },
       },
     },

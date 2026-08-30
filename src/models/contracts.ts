@@ -133,7 +133,7 @@ const publicEvidenceSchema = z
   })
   .strict();
 
-const publicPriceRecordSchema = z
+export const publicPriceRecordSchema = z
   .object({
     publicId: publicIdSchema,
     category: priceCategorySchema,
@@ -149,7 +149,7 @@ const publicPriceRecordSchema = z
   })
   .strict();
 
-const publicBenchmarkRunSchema = z
+export const publicBenchmarkRunSchema = z
   .object({
     publicId: publicIdSchema,
     benchmark: z
@@ -274,6 +274,158 @@ export const modelListRequestSchema = z
   })
   .strict();
 
+export const modelRecommendationRequestSchema = z
+  .object({
+    locale: localeSchema,
+    task: z.string().trim().min(1),
+    benchmarkPublicId: publicIdSchema,
+    benchmarkVersion: z.string().trim().min(1),
+    scoreUnit: z.string().trim().min(1),
+    qualityThreshold: signedDecimalSchema,
+    qualityDirection: z.enum(["at_least", "at_most"]),
+    priceCategory: priceCategorySchema,
+    priceUnit: priceUnitSchema,
+    currency: z.string().regex(/^[A-Z]{3}$/),
+    region: z.string().trim().min(1),
+    maximumUnitPrice: decimalSchema,
+    deployment: modelAccessMethodSchema,
+    requireOpenWeights: z.boolean(),
+    maximumLatencyMs: z.number().int().positive().optional(),
+    latencyBenchmarkPublicId: publicIdSchema.optional(),
+    latencyBenchmarkVersion: z.string().trim().min(1).optional(),
+    versionPublicIds: z.array(publicIdSchema).min(1).max(4).optional(),
+  })
+  .strict()
+  .refine(
+    ({
+      maximumLatencyMs,
+      latencyBenchmarkPublicId,
+      latencyBenchmarkVersion,
+    }) =>
+      maximumLatencyMs === undefined
+        ? latencyBenchmarkPublicId === undefined &&
+          latencyBenchmarkVersion === undefined
+        : latencyBenchmarkPublicId !== undefined &&
+          latencyBenchmarkVersion !== undefined,
+    {
+      path: ["maximumLatencyMs"],
+      message:
+        "latency benchmark identity is required exactly when a latency limit is selected",
+    },
+  );
+
+export const modelRecommendationQuerySchema = z
+  .object({
+    locale: localeSchema.default("en"),
+    task: z.string().trim().min(1),
+    benchmarkPublicId: publicIdSchema,
+    benchmarkVersion: z.string().trim().min(1),
+    scoreUnit: z.string().trim().min(1),
+    qualityThreshold: signedDecimalSchema,
+    qualityDirection: z.enum(["at_least", "at_most"]),
+    priceCategory: priceCategorySchema,
+    priceUnit: priceUnitSchema,
+    currency: z.string().regex(/^[A-Z]{3}$/),
+    region: z.string().trim().min(1),
+    maximumUnitPrice: decimalSchema,
+    deployment: modelAccessMethodSchema,
+    requireOpenWeights: z
+      .enum(["true", "false"])
+      .transform((value) => (value === "true" ? true : false)),
+    maximumLatencyMs: z.coerce.number().int().positive().optional(),
+    latencyBenchmarkPublicId: publicIdSchema.optional(),
+    latencyBenchmarkVersion: z.string().trim().min(1).optional(),
+    versions: z
+      .string()
+      .transform((value) => value.split(","))
+      .pipe(z.array(publicIdSchema).min(1).max(4))
+      .optional(),
+  })
+  .strict()
+  .transform(({ versions, ...input }) => ({
+    ...input,
+    ...(versions ? { versionPublicIds: versions } : {}),
+  }))
+  .pipe(modelRecommendationRequestSchema);
+
+export const modelRecommendationReasonCodeSchema = z.enum([
+  "quality_threshold_met",
+  "budget_met",
+  "latency_met",
+  "deployment_met",
+  "region_met",
+  "open_weights_met",
+  "configuration_evidence_missing",
+  "lifecycle_not_active",
+  "deployment_not_supported",
+  "open_weights_required",
+  "region_unavailable",
+  "quality_evidence_missing",
+  "quality_threshold_not_met",
+  "current_price_missing",
+  "budget_exceeded",
+  "latency_evidence_missing",
+  "latency_exceeded",
+  "price_unit_incompatible",
+  "quality_direction_incompatible",
+  "benchmark_conditions_incompatible",
+  "price_conditions_incompatible",
+  "ambiguous_current_price",
+  "deployment_cost_basis_missing",
+]);
+
+const modelRecommendationReasonSchema = z
+  .object({
+    code: modelRecommendationReasonCodeSchema,
+    message: z.string().min(1),
+  })
+  .strict();
+
+export const publicModelRecommendationSchema = z
+  .object({
+    locale: localeSchema,
+    status: z.enum(["available", "not_comparable", "insufficient_evidence"]),
+    methodology: z
+      .object({
+        publicId: z.literal("model-configuration-fit"),
+        version: z.literal("1.0.0"),
+        question: z.string().min(1),
+        eligibility: z.array(z.string().min(1)).min(1),
+        limitations: z.array(z.string().min(1)).min(1),
+      })
+      .strict(),
+    constraints: modelRecommendationRequestSchema,
+    dataCutoff: timestampSchema.nullable(),
+    candidates: z.array(
+      z
+        .object({
+          familyPublicId: publicIdSchema,
+          familyName: z.string().min(1),
+          familySummary: z.string().min(1),
+          versionPublicId: publicIdSchema,
+          versionLabel: z.string().min(1),
+          provider: z
+            .object({ publicId: publicIdSchema, name: z.string().min(1) })
+            .strict()
+            .nullable(),
+          outcome: z.enum([
+            "fit",
+            "not_fit",
+            "not_comparable",
+            "insufficient_evidence",
+          ]),
+          rank: z.number().int().positive().nullable(),
+          fitReasons: z.array(modelRecommendationReasonSchema),
+          nonFitReasons: z.array(modelRecommendationReasonSchema),
+          priceEvidence: publicPriceRecordSchema.nullable(),
+          qualityEvidence: publicBenchmarkRunSchema.nullable(),
+          latencyEvidence: publicBenchmarkRunSchema.nullable(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
 export const modelErrorResponseSchema = z
   .object({
     error: z.enum([
@@ -299,3 +451,9 @@ export type ModelVersionProfileCreateRequest = z.infer<
 >;
 export type ModelListRequest = z.infer<typeof modelListRequestSchema>;
 export type PublicModelDetail = z.infer<typeof publicModelDetailSchema>;
+export type ModelRecommendationRequest = z.infer<
+  typeof modelRecommendationRequestSchema
+>;
+export type PublicModelRecommendation = z.infer<
+  typeof publicModelRecommendationSchema
+>;
