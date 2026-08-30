@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { database, databasePool } from "@/db/client";
 import {
+  arxivSourceItemMetadata,
   inboxItems,
   ingestRuns,
   sourceCursors,
@@ -132,6 +133,10 @@ const runArxivIngestLocked = async (now: Date) => {
           .returning({ id: sourceItems.id });
         if (inserted) {
           createdCount += 1;
+          await transaction.insert(arxivSourceItemMetadata).values({
+            sourceItemId: inserted.id,
+            authors: item.authors,
+          });
           await transaction.insert(inboxItems).values({
             sourceItemId: inserted.id,
             parseStatus: "parsed",

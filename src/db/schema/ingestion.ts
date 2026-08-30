@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   boolean,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -127,6 +128,16 @@ export const inboxItems = pgTable("inbox_items", {
     .notNull()
     .defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const arxivSourceItemMetadata = pgTable("arxiv_source_item_metadata", {
+  sourceItemId: uuid("source_item_id")
+    .primaryKey()
+    .references(() => sourceItems.id, { onDelete: "cascade" }),
+  authors: jsonb("authors").$type<Array<{ name: string }>>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });

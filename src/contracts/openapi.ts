@@ -61,6 +61,14 @@ import {
   publicModelRecommendationSchema,
   publicModelVersionDetailSchema,
 } from "@/models/contracts";
+import {
+  invalidPaperRequestResponseSchema,
+  paperErrorResponseSchema,
+  paperRevisionProfileCreateRequestSchema,
+  paperRevisionProfileCreateResponseSchema,
+  publicPaperDetailSchema,
+  publicPaperListSchema,
+} from "@/papers/contracts";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
 const eventDraftRequest = z.toJSONSchema(eventDraftRequestSchema);
@@ -94,6 +102,18 @@ const aliasResolutionResponse = z.toJSONSchema(aliasResolutionResponseSchema);
 const entityErrorResponse = z.toJSONSchema(entityErrorResponseSchema);
 const invalidEntityRequestResponse = z.toJSONSchema(
   invalidEntityRequestResponseSchema,
+);
+const paperRevisionProfileCreateRequest = z.toJSONSchema(
+  paperRevisionProfileCreateRequestSchema,
+);
+const paperRevisionProfileCreateResponse = z.toJSONSchema(
+  paperRevisionProfileCreateResponseSchema,
+);
+const publicPaperDetail = z.toJSONSchema(publicPaperDetailSchema);
+const publicPaperList = z.toJSONSchema(publicPaperListSchema);
+const paperErrorResponse = z.toJSONSchema(paperErrorResponseSchema);
+const invalidPaperRequestResponse = z.toJSONSchema(
+  invalidPaperRequestResponseSchema,
 );
 const entityType = z.toJSONSchema(entityTypeSchema);
 const relationType = z.toJSONSchema(relationTypeSchema);
@@ -165,6 +185,10 @@ const operationError = (description: string) => ({
 const modelError = (description: string) => ({
   description,
   content: { "application/json": { schema: modelErrorResponse } },
+});
+const paperError = (description: string) => ({
+  description,
+  content: { "application/json": { schema: paperErrorResponse } },
 });
 
 export const openApiDocument = {
@@ -569,6 +593,155 @@ export const openApiDocument = {
           },
           400: modelError("The requested locale is invalid."),
           404: modelError("The Model Version is not public."),
+        },
+      },
+    },
+    "/api/v1/papers": {
+      get: {
+        summary:
+          "Browse versioned public Papers without claiming academic quality",
+        parameters: [
+          localeParameter,
+          {
+            name: "view",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: ["latest", "trending", "featured"],
+              default: "latest",
+            },
+          },
+          {
+            name: "topic",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+          {
+            name: "author",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+          {
+            name: "institution",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+          {
+            name: "publishedFrom",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date-time" },
+          },
+          {
+            name: "publishedTo",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date-time" },
+          },
+          {
+            name: "hasCode",
+            in: "query",
+            required: false,
+            schema: { type: "string", enum: ["true", "false"] },
+          },
+          {
+            name: "relatedModelPublicId",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+          {
+            name: "limit",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+          },
+          {
+            name: "cursor",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Latest is chronological, Trending returns explicit Insufficient Evidence until attention signals qualify, and Featured is a distinct editorial view that may have no selections. Latest snapshots freeze at most 1,000 Paper cards and report truncation explicitly.",
+            content: { "application/json": { schema: publicPaperList } },
+          },
+          400: {
+            description: "The Paper list filters are invalid.",
+            content: {
+              "application/json": { schema: invalidPaperRequestResponse },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/papers/{publicId}": {
+      get: {
+        summary:
+          "Read one Paper identity with preserved revisions, rights and bilingual guidance",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          localeParameter,
+        ],
+        responses: {
+          200: {
+            description:
+              "A Paper profile with separate metadata and full-text rights, no packaged PDF, revision history and evidenced links.",
+            content: { "application/json": { schema: publicPaperDetail } },
+          },
+          400: paperError("The requested locale is invalid."),
+          404: paperError("The Paper family is not public."),
+        },
+      },
+    },
+    "/api/v1/admin/paper-revision-profiles": {
+      post: {
+        summary:
+          "Attach one rights-separated arXiv revision profile to an exact Paper Version",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: paperRevisionProfileCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "The immutable Paper revision, bilingual guidance and evidenced resources were created.",
+            content: {
+              "application/json": {
+                schema: paperRevisionProfileCreateResponse,
+              },
+            },
+          },
+          400: {
+            description:
+              "The Paper revision profile or an arXiv identity reference is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [paperErrorResponse, invalidPaperRequestResponse],
+                },
+              },
+            },
+          },
+          401: paperError("An authenticated Owner session is required."),
+          409: paperError(
+            "The Paper revision profile or resource ID already exists.",
+          ),
         },
       },
     },

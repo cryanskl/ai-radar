@@ -174,6 +174,20 @@ test("Worker ingests arXiv idempotently, exposes failures, and feeds publication
   expect(concurrentWorkers.map(({ output }) => output).join("\n")).toContain(
     "busy",
   );
+  const metadataClient = new Client({
+    connectionString: application.databaseUrl,
+  });
+  await metadataClient.connect();
+  const harvestedAuthors = await metadataClient.query<{ authors: unknown }>(
+    `select metadata.authors
+     from arxiv_source_item_metadata metadata
+     join source_items item on item.id = metadata.source_item_id
+     where item.public_id = 'arxiv-2608-12345v1'`,
+  );
+  await metadataClient.end();
+  expect(harvestedAuthors.rows).toEqual([
+    { authors: [{ name: "Example Author" }] },
+  ]);
   expect(fixture.requests).toHaveLength(1);
   const tooEarly = await runArxivWorker({
     apiUrl: fixture.url,
@@ -338,7 +352,13 @@ test("Worker ingests arXiv idempotently, exposes failures, and feeds publication
     rate_retry_after: new Date("2026-08-30T08:00:15.000Z"),
     terms_url: "https://info.arxiv.org/help/api/tou.html",
     policy_evidence_version: "arxiv-api-tou-accessed-2026-08-30",
-    allowed_fields: ["arxiv_id", "title", "abstract_url", "published_at"],
+    allowed_fields: [
+      "arxiv_id",
+      "title",
+      "authors",
+      "abstract_url",
+      "published_at",
+    ],
     prohibited_fields: ["abstract_text", "pdf", "source_files"],
     public_display_scope: "metadata_and_ai_radar_authored_summary",
     export_scope: "cc0_descriptive_metadata_only",
@@ -457,4 +477,125 @@ test("Worker ingests arXiv idempotently, exposes failures, and feeds publication
     "href",
     "https://creativecommons.org/publicdomain/zero/1.0/",
   );
+
+  const paperEntity = await context.request.post(
+    `${application.url}/api/v1/admin/entities`,
+    {
+      data: {
+        entity: {
+          publicId: "paper-arxiv-fixture-ingested",
+          type: "paper",
+          officialName: "A Fixture Paper for AI Radar Ingestion",
+          officialUrl: "https://arxiv.org/abs/2608.12345",
+          lastVerifiedAt: "2026-08-30T08:02:00.000Z",
+          rightsStatus: "metadata_only",
+        },
+        localizations: [
+          {
+            locale: "en",
+            name: "A Fixture Paper for AI Radar Ingestion",
+            summary: "AI Radar authored guidance for the ingested Paper.",
+            authorship: "human_authored",
+            reviewStatus: "reviewed",
+          },
+          {
+            locale: "zh",
+            name: "AI Radar 采集示例论文",
+            summary: "AI Radar 为采集论文撰写的独立导读。",
+            authorship: "human_authored",
+            reviewStatus: "reviewed",
+          },
+        ],
+        aliases: [
+          {
+            publicId: "alias-arxiv-fixture-ingested",
+            locale: "en",
+            kind: "official",
+            value: "2608.12345v1",
+          },
+        ],
+        versions: [
+          {
+            publicId: "paper-arxiv-fixture-ingested-v1",
+            versionLabel: "v1",
+            releasedAt: "2026-08-29T13:00:00.000Z",
+            releasedAtPrecision: "second",
+          },
+        ],
+      },
+    },
+  );
+  expect(paperEntity.status()).toBe(201);
+  const paperProfileInput = {
+    familyPublicId: "paper-arxiv-fixture-ingested",
+    versionPublicId: "paper-arxiv-fixture-ingested-v1",
+    sourceItemPublicId: "arxiv-2608-12345v1",
+    arxivId: "2608.12345",
+    arxivVersion: "v1",
+    title: "A Fixture Paper for AI Radar Ingestion",
+    authors: [
+      {
+        name: "Example Author",
+        institutions: ["Example AI Institute"],
+      },
+    ],
+    topics: ["agents"],
+    fullTextRightsStatus: "link_only",
+    fullTextLicenseUrl: null,
+    guidance: [
+      {
+        locale: "en",
+        claimedContributions: ["The source claims an ingestion result."],
+        limitations: ["The source fixture has a narrow scope."],
+        inference: ["AI Radar infers no academic quality from ingestion."],
+        authorship: "human_authored",
+        reviewStatus: "reviewed",
+      },
+      {
+        locale: "zh",
+        claimedContributions: ["原文声称提供采集结果。"],
+        limitations: ["该来源夹具范围有限。"],
+        inference: ["AI Radar 不从采集推断学术质量。"],
+        authorship: "human_authored",
+        reviewStatus: "reviewed",
+      },
+    ],
+    resourceLinks: [],
+  };
+  const inventedAuthor = await context.request.post(
+    `${application.url}/api/v1/admin/paper-revision-profiles`,
+    {
+      data: {
+        ...paperProfileInput,
+        authors: [
+          { name: "Invented Author", institutions: ["Invented Institute"] },
+        ],
+      },
+    },
+  );
+  expect(inventedAuthor.status()).toBe(400);
+  const paperProfile = await context.request.post(
+    `${application.url}/api/v1/admin/paper-revision-profiles`,
+    { data: paperProfileInput },
+  );
+  expect(paperProfile.status()).toBe(201);
+  const ingestedPaper = await context.request.get(
+    `${application.url}/api/v1/papers/paper-arxiv-fixture-ingested?locale=en`,
+  );
+  expect(await ingestedPaper.json()).toMatchObject({
+    arxivId: "2608.12345",
+    pdfPackaged: false,
+    revisions: [
+      {
+        arxivVersion: "v1",
+        abstractUrl: "https://arxiv.org/abs/2608.12345v1",
+        authors: [
+          {
+            name: "Example Author",
+            institutions: ["Example AI Institute"],
+          },
+        ],
+      },
+    ],
+  });
 });

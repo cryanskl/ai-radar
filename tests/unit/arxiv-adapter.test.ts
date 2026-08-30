@@ -30,6 +30,7 @@ describe("arXiv production Source adapter contract", () => {
       fetchedCount: 1,
       items: [
         {
+          authors: [{ name: "Example Author" }],
           externalId: "2608.12345v1",
           originalTitle: "A Fixture Paper for AI Radar Ingestion",
           originalUrl: "https://arxiv.org/abs/2608.12345v1",

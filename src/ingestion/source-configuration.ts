@@ -22,6 +22,7 @@ export const arxivSourcePolicy = {
   allowedFields: [
     "arxiv_id",
     "title",
+    "authors",
     "abstract_url",
     "published_at",
   ] as string[],

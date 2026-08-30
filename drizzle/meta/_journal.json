@@ -64,6 +64,13 @@
       "when": 1788092310912,
       "tag": "0008_motionless_microchip",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788100452989,
+      "tag": "0009_fancy_banshee",
+      "breakpoints": true
     }
   ]
 }

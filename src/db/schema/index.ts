@@ -5,3 +5,4 @@ export * from "./entities";
 export * from "./operations";
 export * from "./search";
 export * from "./models";
+export * from "./papers";

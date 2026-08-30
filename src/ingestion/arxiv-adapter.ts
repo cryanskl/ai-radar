@@ -8,10 +8,15 @@ const arxivLinkSchema = z.object({
   "@_rel": z.string(),
 });
 
+const arxivAuthorSchema = z.object({
+  name: z.string().min(1),
+});
+
 const arxivEntrySchema = z.object({
   id: z.url(),
   title: z.string().min(1),
   published: z.iso.datetime({ offset: true }),
+  author: z.union([arxivAuthorSchema, z.array(arxivAuthorSchema).min(1)]),
   link: z.union([arxivLinkSchema, z.array(arxivLinkSchema)]),
 });
 
@@ -39,6 +44,20 @@ export const buildArxivRequestUrl = ({
   return url;
 };
 
+const arxivHosts = new Set(["arxiv.org", "www.arxiv.org", "export.arxiv.org"]);
+
+export const isArxivAbstractUrl = (value: string, externalId: string) => {
+  const url = new URL(value);
+  return (
+    ["http:", "https:"].includes(url.protocol) &&
+    url.username === "" &&
+    url.password === "" &&
+    url.port === "" &&
+    arxivHosts.has(url.hostname) &&
+    url.pathname === `/abs/${externalId}`
+  );
+};
+
 const normalizeEntry = (entry: z.infer<typeof arxivEntrySchema>) => {
   const idUrl = new URL(entry.id);
   const idMatch = idUrl.pathname.match(/^\/abs\/(.+)$/);
@@ -48,11 +67,6 @@ const normalizeEntry = (entry: z.infer<typeof arxivEntrySchema>) => {
     "@_href"
   ];
   const originalUrlObject = originalUrl ? new URL(originalUrl) : undefined;
-  const arxivHosts = new Set([
-    "arxiv.org",
-    "www.arxiv.org",
-    "export.arxiv.org",
-  ]);
   if (
     !externalId ||
     !originalUrlObject ||
@@ -61,12 +75,7 @@ const normalizeEntry = (entry: z.infer<typeof arxivEntrySchema>) => {
     idUrl.password !== "" ||
     idUrl.port !== "" ||
     !arxivHosts.has(idUrl.hostname) ||
-    !["http:", "https:"].includes(originalUrlObject.protocol) ||
-    originalUrlObject.username !== "" ||
-    originalUrlObject.password !== "" ||
-    originalUrlObject.port !== "" ||
-    !arxivHosts.has(originalUrlObject.hostname) ||
-    originalUrlObject.pathname !== `/abs/${externalId}`
+    !isArxivAbstractUrl(originalUrlObject.toString(), externalId)
   ) {
     throw new Error("arXiv entry is missing its identifier or abstract link");
   }
@@ -75,6 +84,9 @@ const normalizeEntry = (entry: z.infer<typeof arxivEntrySchema>) => {
   originalUrlObject.protocol = "https:";
 
   return {
+    authors: (Array.isArray(entry.author) ? entry.author : [entry.author]).map(
+      ({ name }) => ({ name: name.replace(/\s+/g, " ").trim() }),
+    ),
     externalId,
     originalTitle,
     originalUrl: originalUrlObject.toString(),
