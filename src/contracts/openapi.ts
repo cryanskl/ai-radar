@@ -16,6 +16,7 @@ import {
 } from "@/events/contracts";
 import {
   arxivSourceConfigurationResponseSchema,
+  githubSourceConfigurationResponseSchema,
   inboxEventDraftRequestSchema,
 } from "@/ingestion/contracts";
 import {
@@ -69,6 +70,14 @@ import {
   publicPaperDetailSchema,
   publicPaperListSchema,
 } from "@/papers/contracts";
+import {
+  invalidRepositoryRequestResponseSchema,
+  publicRepositoryDetailSchema,
+  publicRepositoryListSchema,
+  repositoryErrorResponseSchema,
+  repositoryObservationCreateRequestSchema,
+  repositoryObservationCreateResponseSchema,
+} from "@/repositories/contracts";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
 const eventDraftRequest = z.toJSONSchema(eventDraftRequestSchema);
@@ -90,6 +99,9 @@ const eventSplitPreviewResponse = z.toJSONSchema(
 const eventSplitResponse = z.toJSONSchema(eventSplitResponseSchema);
 const arxivSourceConfigurationResponse = z.toJSONSchema(
   arxivSourceConfigurationResponseSchema,
+);
+const githubSourceConfigurationResponse = z.toJSONSchema(
+  githubSourceConfigurationResponseSchema,
 );
 const inboxEventDraftRequest = z.toJSONSchema(inboxEventDraftRequestSchema);
 const entityCreateRequest = z.toJSONSchema(entityCreateRequestSchema);
@@ -114,6 +126,18 @@ const publicPaperList = z.toJSONSchema(publicPaperListSchema);
 const paperErrorResponse = z.toJSONSchema(paperErrorResponseSchema);
 const invalidPaperRequestResponse = z.toJSONSchema(
   invalidPaperRequestResponseSchema,
+);
+const repositoryObservationCreateRequest = z.toJSONSchema(
+  repositoryObservationCreateRequestSchema,
+);
+const repositoryObservationCreateResponse = z.toJSONSchema(
+  repositoryObservationCreateResponseSchema,
+);
+const publicRepositoryList = z.toJSONSchema(publicRepositoryListSchema);
+const publicRepositoryDetail = z.toJSONSchema(publicRepositoryDetailSchema);
+const repositoryErrorResponse = z.toJSONSchema(repositoryErrorResponseSchema);
+const invalidRepositoryRequestResponse = z.toJSONSchema(
+  invalidRepositoryRequestResponseSchema,
 );
 const entityType = z.toJSONSchema(entityTypeSchema);
 const relationType = z.toJSONSchema(relationTypeSchema);
@@ -189,6 +213,10 @@ const modelError = (description: string) => ({
 const paperError = (description: string) => ({
   description,
   content: { "application/json": { schema: paperErrorResponse } },
+});
+const repositoryError = (description: string) => ({
+  description,
+  content: { "application/json": { schema: repositoryErrorResponse } },
 });
 
 export const openApiDocument = {
@@ -706,6 +734,143 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/v1/repositories": {
+      get: {
+        summary:
+          "Browse public GitHub Repositories by new, rising, release or editorial views",
+        parameters: [
+          localeParameter,
+          {
+            name: "view",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: ["new", "rising", "recently_released", "featured"],
+              default: "new",
+            },
+          },
+          ...["topic", "language"].map((name) => ({
+            name,
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          })),
+          {
+            name: "license",
+            in: "query",
+            required: false,
+            schema: { type: "string", enum: ["detected", "missing"] },
+          },
+          {
+            name: "lifecycle",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: ["active", "archived", "mirrored", "unavailable"],
+            },
+          },
+          ...["createdAfter", "updatedAfter"].map((name) => ({
+            name,
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date-time" },
+          })),
+          {
+            name: "limit",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+          },
+          {
+            name: "cursor",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "A rights-gated snapshot with method version, Data Cutoff, explicit evidence state and at most 1,000 Repository cards.",
+            content: { "application/json": { schema: publicRepositoryList } },
+          },
+          400: {
+            description: "The Repository list filters or cursor are invalid.",
+            content: {
+              "application/json": {
+                schema: invalidRepositoryRequestResponse,
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/repositories/{publicId}": {
+      get: {
+        summary:
+          "Read one Repository identity with immutable observations, Releases and evidenced relations",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          localeParameter,
+        ],
+        responses: {
+          200: {
+            description:
+              "A Repository profile with current lifecycle, explicit license state, observation history and metadata-only GitHub links.",
+            content: { "application/json": { schema: publicRepositoryDetail } },
+          },
+          400: repositoryError("The requested locale is invalid."),
+          404: repositoryError("The Repository is not public."),
+        },
+      },
+    },
+    "/api/v1/admin/repository-observations": {
+      post: {
+        summary:
+          "Attach one official GitHub metadata observation to a stable Repository identity",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: repositoryObservationCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "The immutable Repository observation was promoted to public visibility.",
+            content: {
+              "application/json": {
+                schema: repositoryObservationCreateResponse,
+              },
+            },
+          },
+          400: {
+            description:
+              "The request or Repository-to-GitHub identity reference is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    repositoryErrorResponse,
+                    invalidRepositoryRequestResponse,
+                  ],
+                },
+              },
+            },
+          },
+          401: repositoryError("An authenticated Owner session is required."),
+          409: repositoryError("The Repository observation already exists."),
+        },
+      },
+    },
     "/api/v1/admin/paper-revision-profiles": {
       post: {
         summary:
@@ -789,6 +954,24 @@ export const openApiDocument = {
             },
           },
           401: eventError("An authenticated Owner session is required."),
+        },
+      },
+    },
+    "/api/v1/admin/sources/github": {
+      post: {
+        summary: "Configure the reviewed GitHub REST API Source policy",
+        security: [{ ownerSession: [] }],
+        responses: {
+          201: {
+            description:
+              "The metadata-only GitHub Source, retrieval policy, cursor and health state are configured.",
+            content: {
+              "application/json": {
+                schema: githubSourceConfigurationResponse,
+              },
+            },
+          },
+          401: repositoryError("An authenticated Owner session is required."),
         },
       },
     },

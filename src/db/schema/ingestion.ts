@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  bigint,
   boolean,
   integer,
   jsonb,
@@ -7,6 +8,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 import { events, rightsStatusEnum, sourceItems, sources } from "./events";
@@ -141,3 +143,87 @@ export const arxivSourceItemMetadata = pgTable("arxiv_source_item_metadata", {
     .notNull()
     .defaultNow(),
 });
+
+export const githubLicenseStatusEnum = pgEnum("github_license_status", [
+  "detected",
+  "missing",
+]);
+
+export const githubRepositoryLifecycleEnum = pgEnum(
+  "github_repository_lifecycle",
+  ["active", "archived", "mirrored", "unavailable"],
+);
+
+export const githubSourceItemMetadata = pgTable(
+  "github_source_item_metadata",
+  {
+    sourceItemId: uuid("source_item_id")
+      .primaryKey()
+      .references(() => sourceItems.id, { onDelete: "cascade" }),
+    githubRepositoryId: bigint("github_repository_id", {
+      mode: "number",
+    }).notNull(),
+    githubOwnerId: bigint("github_owner_id", { mode: "number" }).notNull(),
+    ownerLogin: text("owner_login").notNull(),
+    name: text("name").notNull(),
+    fullName: text("full_name").notNull(),
+    url: text("url").notNull(),
+    description: text("description"),
+    topics: text("topics").array().notNull(),
+    primaryLanguage: text("primary_language"),
+    languages: jsonb("languages")
+      .$type<Array<{ name: string; bytes: number }>>()
+      .notNull(),
+    licenseStatus: githubLicenseStatusEnum("license_status").notNull(),
+    licenseSpdxId: text("license_spdx_id"),
+    licenseName: text("license_name"),
+    stars: integer("stars").notNull(),
+    forks: integer("forks").notNull(),
+    openIssues: integer("open_issues").notNull(),
+    subscribers: integer("subscribers").notNull(),
+    lifecycleState: githubRepositoryLifecycleEnum("lifecycle_state").notNull(),
+    fork: boolean("fork").notNull(),
+    mirrorUrl: text("mirror_url"),
+    template: boolean("template").notNull(),
+    parentRepository: jsonb("parent_repository").$type<{
+      githubRepositoryId: number;
+      fullName: string;
+      url: string;
+    }>(),
+    sourceRepository: jsonb("source_repository").$type<{
+      githubRepositoryId: number;
+      fullName: string;
+      url: string;
+    }>(),
+    templateRepository: jsonb("template_repository").$type<{
+      githubRepositoryId: number;
+      fullName: string;
+      url: string;
+    }>(),
+    repositoryCreatedAt: timestamp("repository_created_at", {
+      withTimezone: true,
+    }).notNull(),
+    repositoryUpdatedAt: timestamp("repository_updated_at", {
+      withTimezone: true,
+    }).notNull(),
+    pushedAt: timestamp("pushed_at", { withTimezone: true }),
+    observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+    releases: jsonb("releases")
+      .$type<
+        Array<{
+          githubReleaseId: number;
+          tagName: string;
+          name: string | null;
+          url: string;
+          prerelease: boolean;
+          createdAt: string;
+          publishedAt: string | null;
+        }>
+      >()
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (metadata) => [unique().on(metadata.githubRepositoryId, metadata.observedAt)],
+);

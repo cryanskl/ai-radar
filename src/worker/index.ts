@@ -23,6 +23,16 @@ try {
       configuredNow ? new Date(configuredNow) : new Date(),
     );
     console.info("arXiv ingest", result);
+  } else if (source === "github") {
+    const { runGithubIngest } = await import("../ingestion/service");
+    const configuredNow = process.env.INGEST_NOW;
+    if (configuredNow && process.env.NODE_ENV !== "test") {
+      throw new Error("INGEST_NOW overrides are only allowed in tests");
+    }
+    const result = await runGithubIngest(
+      configuredNow ? new Date(configuredNow) : new Date(),
+    );
+    console.info("GitHub ingest", result);
   } else if (source) {
     throw new Error(`Unknown Source adapter: ${source}`);
   }
