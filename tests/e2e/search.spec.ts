@@ -598,7 +598,7 @@ test("Search ranks exact and bilingual matches, composes filters, paginates, and
     page
       .getByRole("heading", { name: "Search Alpha", exact: true })
       .getByRole("link"),
-  ).toHaveAttribute("href", "/en/entities/model-search-alpha");
+  ).toHaveAttribute("href", "/en/models/model-search-alpha");
   await expect(page.getByText("Matched Chinese alias")).toBeVisible();
   await page.goto(
     `${applicationUrl}/zh/search?q=${encodeURIComponent("旧搜索模型")}`,

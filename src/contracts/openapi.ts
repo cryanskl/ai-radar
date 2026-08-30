@@ -51,6 +51,15 @@ import {
   searchErrorResponseSchema,
   searchResponseSchema,
 } from "@/search/contracts";
+import {
+  invalidModelRequestResponseSchema,
+  modelErrorResponseSchema,
+  modelVersionProfileCreateRequestSchema,
+  modelVersionProfileCreateResponseSchema,
+  publicModelDetailSchema,
+  publicModelListSchema,
+  publicModelVersionDetailSchema,
+} from "@/models/contracts";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
 const eventDraftRequest = z.toJSONSchema(eventDraftRequestSchema);
@@ -116,6 +125,19 @@ const invalidOperationRequestResponse = z.toJSONSchema(
 );
 const searchResponse = z.toJSONSchema(searchResponseSchema);
 const searchErrorResponse = z.toJSONSchema(searchErrorResponseSchema);
+const modelVersionProfileCreateRequest = z.toJSONSchema(
+  modelVersionProfileCreateRequestSchema,
+);
+const modelVersionProfileCreateResponse = z.toJSONSchema(
+  modelVersionProfileCreateResponseSchema,
+);
+const publicModelList = z.toJSONSchema(publicModelListSchema);
+const publicModelDetail = z.toJSONSchema(publicModelDetailSchema);
+const publicModelVersionDetail = z.toJSONSchema(publicModelVersionDetailSchema);
+const modelErrorResponse = z.toJSONSchema(modelErrorResponseSchema);
+const invalidModelRequestResponse = z.toJSONSchema(
+  invalidModelRequestResponseSchema,
+);
 
 const localeParameter = {
   name: "locale",
@@ -135,6 +157,10 @@ const entityError = (description: string) => ({
 const operationError = (description: string) => ({
   description,
   content: { "application/json": { schema: operationErrorResponse } },
+});
+const modelError = (description: string) => ({
+  description,
+  content: { "application/json": { schema: modelErrorResponse } },
 });
 
 export const openApiDocument = {
@@ -285,6 +311,105 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/v1/models": {
+      get: {
+        summary: "Browse public Model families and their latest exact version",
+        parameters: [
+          localeParameter,
+          {
+            name: "provider",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+          {
+            name: "modality",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: ["text", "image", "audio", "video"],
+            },
+          },
+          {
+            name: "access",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: ["hosted_api", "open_weights", "self_hosted"],
+            },
+          },
+          {
+            name: "region",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Public Model families with exact latest-version configuration and evidence sufficiency.",
+            content: { "application/json": { schema: publicModelList } },
+          },
+          400: {
+            description: "The Model list filters are invalid.",
+            content: {
+              "application/json": { schema: invalidModelRequestResponse },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/models/{publicId}": {
+      get: {
+        summary: "Read one Model family with exact version facts",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          localeParameter,
+        ],
+        responses: {
+          200: {
+            description:
+              "The Model family, exact versions, separated Price Records, sourced Benchmark Runs, related Entities and timeline.",
+            content: { "application/json": { schema: publicModelDetail } },
+          },
+          400: modelError("The requested locale is invalid."),
+          404: modelError("The Model family is not public."),
+        },
+      },
+    },
+    "/api/v1/model-versions/{publicId}": {
+      get: {
+        summary: "Read one exact Model Version",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          localeParameter,
+        ],
+        responses: {
+          200: {
+            description:
+              "One exact Model Version with configuration, predecessor, successor, separated prices and Benchmark evidence.",
+            content: {
+              "application/json": { schema: publicModelVersionDetail },
+            },
+          },
+          400: modelError("The requested locale is invalid."),
+          404: modelError("The Model Version is not public."),
+        },
+      },
+    },
     "/api/v1/admin/event-drafts": {
       post: {
         summary: "Create a sourced bilingual Event draft",
@@ -358,6 +483,43 @@ export const openApiDocument = {
           },
           401: entityError("An authenticated Owner session is required."),
           409: entityError("An Entity, Alias or Version ID already exists."),
+        },
+      },
+    },
+    "/api/v1/admin/model-version-profiles": {
+      post: {
+        summary:
+          "Attach configuration, Price Records and Benchmark Runs to an exact Model Version",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: modelVersionProfileCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "The exact Model Version profile and its rights-cleared evidence records were created.",
+            content: {
+              "application/json": { schema: modelVersionProfileCreateResponse },
+            },
+          },
+          400: {
+            description:
+              "The Model Version profile or an Evidence reference is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [modelErrorResponse, invalidModelRequestResponse],
+                },
+              },
+            },
+          },
+          401: modelError("An authenticated Owner session is required."),
+          409: modelError(
+            "The Model Version profile, Price Record or Benchmark Run already exists.",
+          ),
         },
       },
     },

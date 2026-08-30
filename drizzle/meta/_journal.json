@@ -57,6 +57,13 @@
       "when": 1788090564142,
       "tag": "0007_luxuriant_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788092310912,
+      "tag": "0008_motionless_microchip",
+      "breakpoints": true
     }
   ]
 }

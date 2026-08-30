@@ -254,7 +254,9 @@ export default async function SearchPage({
             const href =
               item.kind === "event"
                 ? `/${locale}/radar/events/${item.publicId}`
-                : `/${locale}/entities/${item.publicId}`;
+                : item.entityType === "model"
+                  ? `/${locale}/models/${item.publicId}`
+                  : `/${locale}/entities/${item.publicId}`;
             const match = `${labels.matchReason[item.matchReason]} · ${labels.language[item.matchedLocale]}`;
             const crossLanguageAlias =
               item.matchReason === "alias" && item.matchedLocale !== locale
