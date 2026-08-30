@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      DATABASE_URL: postgresql://test:test@127.0.0.1:5432/test
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      NEXTAUTH_SECRET: ci-secret-that-is-long-enough-for-validation
+      GITHUB_ID: ci-github-client-id
+      GITHUB_SECRET: ci-github-client-secret
+      OWNER_GITHUB_ID: "34471145"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify application
+        run: pnpm verify

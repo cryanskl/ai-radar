@@ -1,0 +1,55 @@
+{
+  "name": "ai-radar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.30.2",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev:web": "next dev",
+    "dev:worker": "tsx src/worker/index.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "build": "next build",
+    "start:web": "next start",
+    "start:worker": "tsx src/worker/index.ts",
+    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" \"*.{ts,mjs,json,yml,yaml}\" \".github/**/*.{yml,yaml}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" \"*.{ts,mjs,json,yml,yaml}\" \".github/**/*.{yml,yaml}\"",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "verify": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm test:e2e && pnpm build"
+  },
+  "dependencies": {
+    "@auth/drizzle-adapter": "1.11.3",
+    "@next/env": "16.3.3",
+    "drizzle-orm": "0.45.2",
+    "next": "16.3.3",
+    "next-auth": "4.24.15",
+    "pg": "8.23.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tsx": "4.21.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@testcontainers/postgresql": "12.1.0",
+    "@types/node": "25.0.10",
+    "@types/pg": "8.20.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "drizzle-kit": "0.31.10",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.3",
+    "prettier": "^3.9.6",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  }
+}
