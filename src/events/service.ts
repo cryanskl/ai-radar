@@ -348,8 +348,35 @@ export const publishEvent = async (publicId: string) =>
     return { status: "published" as const, publicId };
   });
 
-const selectPublicEventRows = (locale: "en" | "zh", publicId?: string) =>
-  database
+const selectPublicEventRows = async (
+  locale: "en" | "zh",
+  publicId?: string,
+  limit?: number,
+) => {
+  const candidateIds =
+    publicId || limit === undefined
+      ? null
+      : await database
+          .select({ id: events.id })
+          .from(events)
+          .innerJoin(
+            localizedContents,
+            eq(localizedContents.eventId, events.id),
+          )
+          .where(
+            and(
+              eq(events.publicationState, "published"),
+              eq(events.publicVisibility, true),
+              eq(localizedContents.locale, locale),
+              eq(localizedContents.reviewStatus, "reviewed"),
+              eq(localizedContents.publicVisibility, true),
+            ),
+          )
+          .orderBy(desc(events.occurredAt), events.publicId)
+          .limit(limit);
+  if (candidateIds?.length === 0) return [];
+
+  return database
     .select({
       id: events.id,
       publicId: events.publicId,
@@ -392,6 +419,12 @@ const selectPublicEventRows = (locale: "en" | "zh", publicId?: string) =>
         eq(localizedContents.publicVisibility, true),
         eq(sourceItems.publicVisibility, true),
         publicId ? eq(events.publicId, publicId) : undefined,
+        candidateIds
+          ? inArray(
+              events.id,
+              candidateIds.map(({ id }) => id),
+            )
+          : undefined,
       ),
     )
     .orderBy(
@@ -399,6 +432,7 @@ const selectPublicEventRows = (locale: "en" | "zh", publicId?: string) =>
       desc(eventSources.isPrimary),
       events.publicId,
     );
+};
 
 const mapPublicEvents = (
   rows: Awaited<ReturnType<typeof selectPublicEventRows>>,
@@ -595,8 +629,10 @@ const attachOperationalHistory = async (
   return mappedEvents;
 };
 
-export const listPublicEvents = async (locale: "en" | "zh") => {
-  const events = mapPublicEvents(await selectPublicEventRows(locale));
+export const listPublicEvents = async (locale: "en" | "zh", limit?: number) => {
+  const events = mapPublicEvents(
+    await selectPublicEventRows(locale, undefined, limit),
+  );
   await Promise.all([
     attachPublicEntities(events, locale),
     attachOperationalHistory(events),
