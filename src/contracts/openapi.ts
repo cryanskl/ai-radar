@@ -106,6 +106,16 @@ import {
   skillProfileCreateRequestSchema,
   skillProfileCreateResponseSchema,
 } from "@/skills/contracts";
+import {
+  guideErrorResponseSchema,
+  guideProfileCreateRequestSchema,
+  guideProfileCreateResponseSchema,
+  guideStatusAppendRequestSchema,
+  guideStatusAppendResponseSchema,
+  invalidGuideRequestResponseSchema,
+  publicGuideDetailSchema,
+  publicGuideListSchema,
+} from "@/guides/contracts";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
 const eventDraftRequest = z.toJSONSchema(eventDraftRequestSchema);
@@ -215,6 +225,22 @@ const skillErrorResponse = z.toJSONSchema(skillErrorResponseSchema);
 const invalidSkillRequestResponse = z.toJSONSchema(
   invalidSkillRequestResponseSchema,
 );
+const guideProfileCreateRequest = z.toJSONSchema(
+  guideProfileCreateRequestSchema,
+);
+const guideProfileCreateResponse = z.toJSONSchema(
+  guideProfileCreateResponseSchema,
+);
+const guideStatusAppendRequest = z.toJSONSchema(guideStatusAppendRequestSchema);
+const guideStatusAppendResponse = z.toJSONSchema(
+  guideStatusAppendResponseSchema,
+);
+const publicGuideList = z.toJSONSchema(publicGuideListSchema);
+const publicGuideDetail = z.toJSONSchema(publicGuideDetailSchema);
+const guideErrorResponse = z.toJSONSchema(guideErrorResponseSchema);
+const invalidGuideRequestResponse = z.toJSONSchema(
+  invalidGuideRequestResponseSchema,
+);
 const entityType = z.toJSONSchema(entityTypeSchema);
 const relationType = z.toJSONSchema(relationTypeSchema);
 const correctionCreateRequest = z.toJSONSchema(correctionCreateRequestSchema);
@@ -305,6 +331,10 @@ const promptError = (description: string) => ({
 const skillError = (description: string) => ({
   description,
   content: { "application/json": { schema: skillErrorResponse } },
+});
+const guideError = (description: string) => ({
+  description,
+  content: { "application/json": { schema: guideErrorResponse } },
 });
 
 export const openApiDocument = {
@@ -1273,6 +1303,168 @@ export const openApiDocument = {
           },
           401: skillError("An authenticated Owner session is required."),
           409: skillError("The Skill profile already exists."),
+        },
+      },
+    },
+    "/api/v1/guides": {
+      get: {
+        summary:
+          "Discover current or explicitly requested stale Guides by category, provenance and public rights status",
+        parameters: [
+          localeParameter,
+          {
+            name: "category",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              pattern: "^[a-z0-9]+(?:_[a-z0-9]+)*$",
+            },
+          },
+          {
+            name: "provenance",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: [
+                "ai_radar_original",
+                "authorized_submission",
+                "external_guidance",
+              ],
+            },
+          },
+          {
+            name: "status",
+            in: "query",
+            required: false,
+            schema: { type: "string", enum: ["current", "stale"] },
+          },
+          {
+            name: "rightsStatus",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: [
+                "open",
+                "attribution_required",
+                "source_license",
+                "metadata_only",
+                "link_only",
+              ],
+            },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Rights-cleared Guides. The default projection includes only current Guides; stale history requires an explicit filter.",
+            content: { "application/json": { schema: publicGuideList } },
+          },
+          400: {
+            description: "The Guide list filters are invalid.",
+            content: {
+              "application/json": { schema: invalidGuideRequestResponse },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/guides/{publicId}": {
+      get: {
+        summary:
+          "Read one Guide with provenance, verified steps, freshness and evidenced related records",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          localeParameter,
+        ],
+        responses: {
+          200: {
+            description:
+              "A bilingual Guide detail. External guidance remains a summary and original-source link rather than a replacement tutorial.",
+            content: { "application/json": { schema: publicGuideDetail } },
+          },
+          400: {
+            description: "The requested locale is invalid.",
+            content: {
+              "application/json": { schema: invalidGuideRequestResponse },
+            },
+          },
+          404: guideError("The Guide is not public."),
+        },
+      },
+    },
+    "/api/v1/admin/guide-profiles": {
+      post: {
+        summary:
+          "Publish one sourced Guide with bilingual content, verified mutable steps and an initial freshness observation",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: guideProfileCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description: "The maintainable Guide profile was published.",
+            content: {
+              "application/json": { schema: guideProfileCreateResponse },
+            },
+          },
+          400: {
+            description:
+              "The request, Guide identity, rights combination or source evidence is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [guideErrorResponse, invalidGuideRequestResponse],
+                },
+              },
+            },
+          },
+          401: guideError("An authenticated Owner session is required."),
+          409: guideError("The Guide profile already exists."),
+        },
+      },
+    },
+    "/api/v1/admin/guide-status-observations": {
+      post: {
+        summary:
+          "Append an evidenced current or stale observation without rewriting Guide history",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: guideStatusAppendRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "The Guide freshness state was updated by appending an immutable observation.",
+            content: {
+              "application/json": { schema: guideStatusAppendResponse },
+            },
+          },
+          400: {
+            description: "The request, Guide or source evidence is invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [guideErrorResponse, invalidGuideRequestResponse],
+                },
+              },
+            },
+          },
+          401: guideError("An authenticated Owner session is required."),
+          409: guideError("The Guide status observation already exists."),
         },
       },
     },

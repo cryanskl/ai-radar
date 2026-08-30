@@ -76,6 +76,87 @@ type CurrentTombstoneRow = {
 const normalizeSearchText = (value: string) =>
   value.normalize("NFKC").trim().toLocaleLowerCase();
 
+const guideSearchEligibilitySql = (localePlaceholder: "$1" | "$3") => `
+  and (document.entity_type is distinct from 'guide' or exists (
+    select 1 from guide_profiles profile
+    join source_items profile_source
+      on profile_source.id = profile.source_item_id
+      and profile_source.public_visibility = true
+      and profile_source.rights_status in (
+        'open', 'attribution_required', 'source_license',
+        'metadata_only', 'link_only'
+      )
+    join guide_version_profiles version_profile
+      on version_profile.guide_profile_id = profile.id
+      and version_profile.public_visibility = true
+    join entity_versions version on version.id = version_profile.entity_version_id
+      and version.entity_id = document.object_id
+      and version.public_visibility = true
+    join source_items version_source
+      on version_source.id = version_profile.source_item_id
+      and version_source.public_visibility = true
+      and version_source.rights_status in (
+        'open', 'attribution_required', 'source_license',
+        'metadata_only', 'link_only'
+      )
+    join guide_version_localized_contents guide_localization
+      on guide_localization.guide_version_profile_id = version_profile.id
+      and guide_localization.locale = ${localePlaceholder}::content_locale
+      and guide_localization.review_status = 'reviewed'
+      and guide_localization.public_visibility = true
+    join lateral (
+      select latest.status
+      from (
+        select observation.status, observation.source_item_id
+        from guide_status_observations observation
+        where observation.guide_version_profile_id = version_profile.id
+          and observation.public_visibility = true
+        order by observation.observed_at desc, observation.public_id desc
+        limit 1
+      ) latest
+      join source_items status_source on status_source.id = latest.source_item_id
+        and status_source.public_visibility = true
+        and status_source.rights_status in (
+          'open', 'attribution_required', 'source_license',
+          'metadata_only', 'link_only'
+        )
+      where latest.status = 'current'
+    ) current_status on true
+    where profile.entity_id = document.object_id
+      and profile.public_visibility = true
+      and profile.rights_status in (
+        'open', 'attribution_required', 'source_license',
+        'metadata_only', 'link_only'
+      )
+      and exists (
+        select 1 from relations relation
+        join relation_evidence evidence on evidence.relation_id = relation.id
+        join source_items relation_source
+          on relation_source.id = evidence.source_item_id
+          and relation_source.public_visibility = true
+          and relation_source.rights_status in (
+            'open', 'attribution_required', 'source_license',
+            'metadata_only', 'link_only'
+          )
+        left join entities target on target.id = relation.object_entity_id
+        left join events subject_event on subject_event.id = relation.subject_event_id
+        where relation.review_status = 'reviewed'
+          and relation.public_visibility = true
+          and (
+            (relation.subject_entity_id = document.object_id
+              and relation.predicate = 'EXPLAINS'
+              and target.type in ('model', 'product', 'repository', 'prompt', 'skill')
+              and target.lifecycle_status = 'active'
+              and target.public_visibility = true)
+            or
+            (relation.object_entity_id = document.object_id
+              and relation.subject_event_id is not null
+              and subject_event.publication_state in ('published', 'corrected')
+              and subject_event.public_visibility = true)
+          )
+      )
+  ))`;
+
 const requestKeyFor = (input: SearchRequest) =>
   JSON.stringify({
     q: normalizeSearchText(input.q),
@@ -372,6 +453,7 @@ presentation_documents as (
           'metadata_only', 'link_only'
         )
     ))
+    ${guideSearchEligibilitySql("$3")}
 ),
 matches as (
   select term.object_kind::text as kind, term.object_id,
@@ -893,7 +975,8 @@ const hydrateSnapshotItems = async (
             'open', 'attribution_required', 'source_license',
             'metadata_only', 'link_only'
           )
-      ))`,
+      ))
+      ${guideSearchEligibilitySql("$1")}`,
     [input.locale, publicIds, normalizeSearchText(input.q), input.q],
   );
   const currentByKey = new Map(

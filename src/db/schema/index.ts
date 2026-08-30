@@ -10,3 +10,4 @@ export * from "./repositories";
 export * from "./products";
 export * from "./prompts";
 export * from "./skills";
+export * from "./guides";
