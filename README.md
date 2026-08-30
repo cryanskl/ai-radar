@@ -55,6 +55,18 @@ Put its client ID and secret in `.env.local`. `OWNER_GITHUB_ID` is the immutable
 
 The first editorial slice is API-driven: an authenticated Owner creates a Source, rights-classified Source Item, Event and reviewed English/Chinese Localized Content with `POST /api/v1/admin/event-drafts`. The returned Event public ID opens its bilingual preview at `/admin/events/{publicId}`, where the Owner can publish it. The complete request and response schemas, including rights-related failure responses, are available from the OpenAPI document.
 
+## arXiv Source ingestion
+
+The first production Source adapter reads descriptive metadata from the official arXiv API. An authenticated Owner first calls `POST /api/v1/admin/sources/arxiv` to record the reviewed Source and retrieval policy. The policy evidence points to the [arXiv API Terms of Use](https://info.arxiv.org/help/api/tou.html), keeps no raw Atom payload, requests at most 25 newest records, and enforces arXiv's minimum three-second interval. It stores only a response hash and CC0-classified identification metadata; it does not store PDFs, source files or source-authored abstract text. The policy record also distinguishes what AI Radar may display from the narrower metadata-only export boundary.
+
+Run one retrieval from the independently runnable Worker:
+
+```bash
+pnpm dev:worker -- --once --source arxiv
+```
+
+The cursor, every Ingest Run, Source Health, retry time, lag and new candidates are visible at <http://localhost:3000/admin/inbox>. Replaying a cursor is safe: the `(source_id, external_id)` boundary prevents duplicate Source Items. Network, rate-limit, authentication and parsing failures exit unsuccessfully after writing retryable operational state, so they cannot look like an empty news day.
+
 ## Verification and production build
 
 The unit suite is fast and does not use the network:
@@ -95,6 +107,7 @@ pnpm start:worker
 - `src/contracts` — executable HTTP contracts and OpenAPI generation
 - `src/db` and `drizzle` — executable PostgreSQL schema and migrations
 - `src/events` — Event creation, publication gates and public projections
+- `src/ingestion` — dedicated Source adapters, cursor-safe ingest and Inbox projections
 - `src/worker` — separately runnable Worker entry point
 - `tests/unit` — deterministic policy tests
 - `tests/e2e` — real browser, HTTP and isolated PostgreSQL seams

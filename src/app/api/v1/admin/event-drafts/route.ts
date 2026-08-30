@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
-import { DatabaseError } from "pg";
 import { authOptions } from "@/auth/options";
+import { isUniqueViolation } from "@/db/errors";
 import {
   eventDraftRequestSchema,
   eventDraftResponseSchema,
@@ -36,11 +36,7 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.cause instanceof DatabaseError &&
-      error.cause.code === "23505"
-    ) {
+    if (isUniqueViolation(error)) {
       return Response.json({ error: "already_exists" }, { status: 409 });
     }
     throw error;

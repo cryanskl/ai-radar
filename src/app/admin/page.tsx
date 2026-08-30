@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/auth/options";
 
@@ -15,6 +16,7 @@ export default async function AdminPage() {
     <main>
       <h1>Owner administration</h1>
       <p>Signed in as {session.user.email ?? session.user.name}.</p>
+      <Link href="/admin/inbox">Open Source Inbox and health</Link>
     </main>
   );
 }

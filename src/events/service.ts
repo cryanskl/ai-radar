@@ -4,11 +4,13 @@ import {
   eventPublicationAudits,
   eventSources,
   events,
+  inboxItems,
   localizedContents,
   sourceItems,
   sources,
 } from "@/db/schema";
 import { publicRightsStatusSchema, type EventDraftRequest } from "./contracts";
+import type { InboxEventDraftRequest } from "@/ingestion/contracts";
 
 const approvedSourceAccessStatuses = new Set(["approved", "approved_limited"]);
 
@@ -21,7 +23,18 @@ const fulfillsRightsRequirements = (
     ? true
     : licenseUrl !== null);
 
-const initialPublicationState = (input: EventDraftRequest) => {
+type PublicationReadiness = Pick<
+  EventDraftRequest,
+  "event" | "localizations"
+> & {
+  source: Pick<EventDraftRequest["source"], "accessStatus">;
+  sourceItem: Pick<
+    EventDraftRequest["sourceItem"],
+    "rightsStatus" | "licenseUrl"
+  >;
+};
+
+const initialPublicationState = (input: PublicationReadiness) => {
   if (input.event.factStatus === "withdrawn") return "withdrawn" as const;
 
   const ready =
@@ -87,6 +100,82 @@ export const createEventDraft = async (input: EventDraftRequest) => {
     };
   });
 };
+
+export const createEventDraftFromInbox = async (
+  sourceItemPublicId: string,
+  input: InboxEventDraftRequest,
+) =>
+  database.transaction(async (transaction) => {
+    const [candidate] = await transaction
+      .select({
+        inboxId: inboxItems.id,
+        inboxStatus: inboxItems.status,
+        sourceItemId: sourceItems.id,
+        discoveredAt: sourceItems.discoveredAt,
+        sourceRightsStatus: sourceItems.rightsStatus,
+        licenseUrl: sourceItems.licenseUrl,
+        sourceAccessStatus: sources.accessStatus,
+      })
+      .from(inboxItems)
+      .innerJoin(sourceItems, eq(sourceItems.id, inboxItems.sourceItemId))
+      .innerJoin(sources, eq(sources.id, sourceItems.sourceId))
+      .where(eq(sourceItems.publicId, sourceItemPublicId));
+    if (!candidate) return { status: "not_found" as const };
+    if (candidate.inboxStatus !== "new") {
+      return { status: "already_converted" as const };
+    }
+    const convertedAt = new Date();
+    const [claimed] = await transaction
+      .update(inboxItems)
+      .set({ status: "converted", updatedAt: convertedAt })
+      .where(
+        and(eq(inboxItems.id, candidate.inboxId), eq(inboxItems.status, "new")),
+      )
+      .returning({ id: inboxItems.id });
+    if (!claimed) return { status: "already_converted" as const };
+
+    const publicationState = initialPublicationState({
+      event: input.event,
+      localizations: input.localizations,
+      source: { accessStatus: candidate.sourceAccessStatus },
+      sourceItem: {
+        rightsStatus: candidate.sourceRightsStatus,
+        licenseUrl: candidate.licenseUrl,
+      },
+    });
+    const [event] = await transaction
+      .insert(events)
+      .values({
+        ...input.event,
+        publicationState,
+        occurredAt: new Date(input.event.occurredAt),
+        discoveredAt: candidate.discoveredAt,
+        lastVerifiedAt: new Date(input.event.lastVerifiedAt),
+      })
+      .returning({ id: events.id, publicId: events.publicId });
+    await transaction.insert(eventSources).values({
+      eventId: event.id,
+      sourceItemId: candidate.sourceItemId,
+      isPrimary: true,
+    });
+    await transaction.insert(localizedContents).values(
+      input.localizations.map((localization) => ({
+        ...localization,
+        eventId: event.id,
+      })),
+    );
+    await transaction
+      .update(inboxItems)
+      .set({ eventId: event.id, updatedAt: convertedAt })
+      .where(eq(inboxItems.id, candidate.inboxId));
+
+    return {
+      status: "created" as const,
+      publicId: event.publicId,
+      publicationState,
+      locales: input.localizations.map(({ locale }) => locale),
+    };
+  });
 
 export const getEventDraft = async (publicId: string) => {
   const rows = await database

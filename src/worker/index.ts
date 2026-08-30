@@ -7,14 +7,32 @@ loadEnvConfig(process.cwd());
 
 const { databasePool } = await import("../db/client");
 
-await databasePool.query("select 1");
-console.info("AI Radar Worker ready");
+try {
+  await databasePool.query("select 1");
+  console.info("AI Radar Worker ready");
 
-if (!process.argv.includes("--once")) {
-  await new Promise<void>((resolve) => {
-    process.once("SIGINT", resolve);
-    process.once("SIGTERM", resolve);
-  });
+  const sourceIndex = process.argv.indexOf("--source");
+  const source = sourceIndex === -1 ? undefined : process.argv[sourceIndex + 1];
+  if (source === "arxiv") {
+    const { runArxivIngest } = await import("../ingestion/service");
+    const configuredNow = process.env.INGEST_NOW;
+    if (configuredNow && process.env.NODE_ENV !== "test") {
+      throw new Error("INGEST_NOW overrides are only allowed in tests");
+    }
+    const result = await runArxivIngest(
+      configuredNow ? new Date(configuredNow) : new Date(),
+    );
+    console.info("arXiv ingest", result);
+  } else if (source) {
+    throw new Error(`Unknown Source adapter: ${source}`);
+  }
+
+  if (!process.argv.includes("--once")) {
+    await new Promise<void>((resolve) => {
+      process.once("SIGINT", resolve);
+      process.once("SIGTERM", resolve);
+    });
+  }
+} finally {
+  await databasePool.end();
 }
-
-await databasePool.end();

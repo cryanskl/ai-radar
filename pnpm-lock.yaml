@@ -16,6 +16,9 @@ importers:
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@types/pg@8.20.0)(pg@8.23.0)
+      fast-xml-parser:
+        specifier: 5.3.8
+        version: 5.3.8
       next:
         specifier: 16.3.3
         version: 16.3.3(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@25.0.10)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -2243,6 +2246,12 @@ packages:
       }
     engines: { node: ">=12" }
 
+  anynum@1.0.1:
+    resolution:
+      {
+        integrity: sha512-N6//FLET/tXYNM/F6ABca1oH6fWB+KlTt909Le28WMDBk8oaT4vY17DCrwg2MvmuqUKt3Ni4N5dGJ/EoBgcO6A==,
+      }
+
   archiver-utils@5.0.2:
     resolution:
       {
@@ -3302,6 +3311,13 @@ packages:
       {
         integrity: sha512-7Ical1vFEMr0onbVzEDIreM22I4khW+fzyQPwvAFWBp1iwdshSZRsL4jjRvPG9JP1uiqMHRto+YU6R2/CzDz5Q==,
       }
+
+  fast-xml-parser@5.3.8:
+    resolution:
+      {
+        integrity: sha512-53jIF4N6u/pxvaL1eb/hEZts/cFLWZ92eCfLrNyCI0k38lettCG/Bs40W9pPwoPXyHQlKu2OUbQtiEIZK/J6Vw==,
+      }
+    hasBin: true
 
   fastq@1.20.3:
     resolution:
@@ -5197,6 +5213,12 @@ packages:
       }
     engines: { node: ">=8" }
 
+  strnum@2.4.2:
+    resolution:
+      {
+        integrity: sha512-rDG3Ah4TV0k1hWvLSzkZtMmLN9+eS+h3knq4MP6A42Y3Yh5qGNnOUs1jJkoSr8FG5dsL28c7KgkIBzSEykqtuw==,
+      }
+
   styled-jsx@5.1.6:
     resolution:
       {
@@ -6756,6 +6778,8 @@ snapshots:
 
   ansi-styles@6.2.3: {}
 
+  anynum@1.0.1: {}
+
   archiver-utils@5.0.2:
     dependencies:
       glob: 10.5.0
@@ -7585,6 +7609,10 @@ snapshots:
   fast-levenshtein@2.0.6: {}
 
   fast-uri@3.1.6: {}
+
+  fast-xml-parser@5.3.8:
+    dependencies:
+      strnum: 2.4.2
 
   fastq@1.20.3:
     dependencies:
@@ -8734,6 +8762,10 @@ snapshots:
   strip-bom@3.0.0: {}
 
   strip-json-comments@3.1.1: {}
+
+  strnum@2.4.2:
+    dependencies:
+      anynum: 1.0.1
 
   styled-jsx@5.1.6(@babel/core@7.29.7)(react@19.2.8):
     dependencies:

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <id>https://export.arxiv.org/api/query/test</id>
+  <updated>2026-08-30T07:30:00Z</updated>
+  <entry>
+    <id>https://arxiv.org/abs/2608.12345v1</id>
+    <updated>2026-08-29T13:00:00Z</updated>
+    <published>2026-08-29T13:00:00Z</published>
+    <title>A Fixture Paper for AI Radar Ingestion</title>
+    <summary>This source-authored abstract must not enter the Source Item contract.</summary>
+    <author><name>Example Author</name></author>
+    <link href="https://arxiv.org/abs/2608.12345v1" rel="alternate" type="text/html" />
+    <link href="https://arxiv.org/pdf/2608.12345v1" rel="related" type="application/pdf" />
+    <category term="cs.AI" />
+  </entry>
+</feed>

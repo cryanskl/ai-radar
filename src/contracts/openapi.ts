@@ -8,6 +8,10 @@ import {
   publicEventListSchema,
   publicEventSchema,
 } from "@/events/contracts";
+import {
+  arxivSourceConfigurationResponseSchema,
+  inboxEventDraftRequestSchema,
+} from "@/ingestion/contracts";
 import { statusResponseSchema } from "./status";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
@@ -20,6 +24,10 @@ const invalidEventRequestResponse = z.toJSONSchema(
 const eventPublishResponse = z.toJSONSchema(eventPublishResponseSchema);
 const publicEvent = z.toJSONSchema(publicEventSchema);
 const publicEventList = z.toJSONSchema(publicEventListSchema);
+const arxivSourceConfigurationResponse = z.toJSONSchema(
+  arxivSourceConfigurationResponseSchema,
+);
+const inboxEventDraftRequest = z.toJSONSchema(inboxEventDraftRequestSchema);
 
 const localeParameter = {
   name: "locale",
@@ -91,6 +99,62 @@ export const openApiDocument = {
           },
           401: eventError("An authenticated Owner session is required."),
           409: eventError("A Source, Source Item or Event ID already exists."),
+        },
+      },
+    },
+    "/api/v1/admin/sources/arxiv": {
+      post: {
+        summary: "Configure the reviewed arXiv production Source policy",
+        security: [{ ownerSession: [] }],
+        responses: {
+          201: {
+            description:
+              "The arXiv Source, retrieval policy, cursor and health state are configured.",
+            content: {
+              "application/json": {
+                schema: arxivSourceConfigurationResponse,
+              },
+            },
+          },
+          401: eventError("An authenticated Owner session is required."),
+        },
+      },
+    },
+    "/api/v1/admin/inbox/{sourceItemPublicId}/event-draft": {
+      post: {
+        summary: "Convert one ingested Source Item into an Event draft",
+        security: [{ ownerSession: [] }],
+        parameters: [
+          {
+            name: "sourceItemPublicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: inboxEventDraftRequest } },
+        },
+        responses: {
+          201: {
+            description:
+              "The Inbox candidate was linked to a bilingual Event draft.",
+            content: { "application/json": { schema: eventDraftResponse } },
+          },
+          400: {
+            description: "The request body is invalid JSON or Event data.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [eventErrorResponse, invalidEventRequestResponse],
+                },
+              },
+            },
+          },
+          401: eventError("An authenticated Owner session is required."),
+          404: eventError("The Source Item is not in the Inbox."),
+          409: eventError("The Source Item or Event was already converted."),
         },
       },
     },
