@@ -2,7 +2,7 @@
 
 AI Radar is an open-source, bilingual AI information system for global news, papers, models, benchmarks, products, repositories, prompts, skills and practical guides. The Public Alpha is event-first and source-first: English and Chinese presentation share one fact and provenance layer.
 
-The repository is under active Public Alpha development. The current executable baseline provides live English and Chinese service-status pages, a versioned status API and OpenAPI document, a separately runnable Worker, PostgreSQL migrations, and allowlisted Owner access through GitHub OAuth.
+The repository is under active Public Alpha development. The current executable baseline provides a sourced bilingual Event publication flow, English and Chinese Radar pages, versioned public and Owner APIs with an OpenAPI document, a separately runnable Worker, PostgreSQL migrations, and allowlisted Owner access through GitHub OAuth.
 
 ## Quick start
 
@@ -37,7 +37,10 @@ Open these public routes:
 
 - English status: <http://localhost:3000/en/status>
 - 中文状态: <http://localhost:3000/zh/status>
+- English Radar: <http://localhost:3000/en/radar>
+- 中文雷达: <http://localhost:3000/zh/radar>
 - Status API: <http://localhost:3000/api/v1/status>
+- Published Events API: <http://localhost:3000/api/v1/events?locale=en>
 - OpenAPI 3.1: <http://localhost:3000/api/openapi.json>
 
 ## GitHub Owner authentication
@@ -49,6 +52,8 @@ http://localhost:3000/api/auth/callback/github
 ```
 
 Put its client ID and secret in `.env.local`. `OWNER_GITHUB_ID` is the immutable numeric GitHub account ID allowed to create an Owner session. Public pages do not require an account. Visit <http://localhost:3000/admin> to begin the Owner sign-in flow.
+
+The first editorial slice is API-driven: an authenticated Owner creates a Source, rights-classified Source Item, Event and reviewed English/Chinese Localized Content with `POST /api/v1/admin/event-drafts`. The returned Event public ID opens its bilingual preview at `/admin/events/{publicId}`, where the Owner can publish it. The complete request and response schemas, including rights-related failure responses, are available from the OpenAPI document.
 
 ## Verification and production build
 
@@ -89,6 +94,7 @@ pnpm start:worker
 - `src/auth` — GitHub allowlist and server-side session configuration
 - `src/contracts` — executable HTTP contracts and OpenAPI generation
 - `src/db` and `drizzle` — executable PostgreSQL schema and migrations
+- `src/events` — Event creation, publication gates and public projections
 - `src/worker` — separately runnable Worker entry point
 - `tests/unit` — deterministic policy tests
 - `tests/e2e` — real browser, HTTP and isolated PostgreSQL seams
