@@ -16,6 +16,7 @@ import {
 import { publicRightsStatusSchema } from "@/events/contracts";
 import type { EntityCreateRequest, RelationCreateRequest } from "./contracts";
 import { getPublicCorrectionsForEntity } from "@/operations/service";
+import { refreshEntitySearchIndex } from "@/search/indexer";
 
 export const normalizeEntityAlias = (value: string) =>
   value.normalize("NFKC").trim().toLocaleLowerCase();
@@ -74,6 +75,7 @@ export const createEntity = async (input: EntityCreateRequest) => {
       targetPublicId: entity.publicId,
       publicVisibility,
     });
+    await refreshEntitySearchIndex(transaction, entity.id);
 
     return {
       publicId: entity.publicId,

@@ -20,6 +20,7 @@ import {
   getPublicCorrectionsForEvent,
   getPublicRightsDecisionsForEvent,
 } from "@/operations/service";
+import { refreshEventSearchIndex } from "@/search/indexer";
 
 const approvedSourceAccessStatuses = new Set(["approved", "approved_limited"]);
 
@@ -342,6 +343,7 @@ export const publishEvent = async (publicId: string) =>
       toState: "published",
       createdAt: publishedAt,
     });
+    await refreshEventSearchIndex(transaction, event.id);
 
     return { status: "published" as const, publicId };
   });

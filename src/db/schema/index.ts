@@ -3,3 +3,4 @@ export * from "./events";
 export * from "./ingestion";
 export * from "./entities";
 export * from "./operations";
+export * from "./search";

@@ -34,6 +34,10 @@ import type {
   EventCorrectionCreateRequest,
   RightsDecisionCreateRequest,
 } from "./contracts";
+import {
+  refreshEntitySearchIndex,
+  refreshEventSearchIndex,
+} from "@/search/indexer";
 
 type Change = {
   field: string;
@@ -477,6 +481,7 @@ export const createCorrection = async (input: CorrectionCreateRequest) =>
         publicVisibility: true,
         createdAt: new Date(input.effectiveAt),
       });
+      await refreshEventSearchIndex(transaction, event.id);
       return {
         status: "corrected" as const,
         publicId: input.publicId,
@@ -660,6 +665,7 @@ export const createCorrection = async (input: CorrectionCreateRequest) =>
       publicVisibility: true,
       createdAt: new Date(input.effectiveAt),
     });
+    await refreshEntitySearchIndex(transaction, entity.id);
     return {
       status: "corrected" as const,
       publicId: input.publicId,
@@ -855,6 +861,8 @@ export const mergeEntities = async (input: EntityMergeRequest) =>
       publicVisibility: false,
       createdAt: effectiveAt,
     });
+    await refreshEntitySearchIndex(transaction, source.id);
+    await refreshEntitySearchIndex(transaction, target.id);
     return {
       status: "merged" as const,
       sourceEntityPublicId: source.publicId,
@@ -920,6 +928,7 @@ export const restrictEditorialCaseForReview = async (
         publicVisibility: false,
         createdAt: restrictedAt,
       });
+      await refreshEventSearchIndex(transaction, event.id);
       return {
         status: "reviewing" as const,
         casePublicId: input.case.publicId,
@@ -980,6 +989,7 @@ export const restrictEditorialCaseForReview = async (
       publicVisibility: false,
       createdAt: restrictedAt,
     });
+    await refreshEntitySearchIndex(transaction, entity.id);
     return {
       status: "reviewing" as const,
       casePublicId: input.case.publicId,
@@ -1136,6 +1146,19 @@ export const transitionEditorialCase = async (
         input.transition === "reject" || editorialCase.status !== "reviewing",
       createdAt: occurredAt,
     });
+    if (input.transition === "reject") {
+      if (editorialCase.targetType === "event") {
+        await refreshEventSearchIndex(
+          transaction,
+          editorialCase.targetEventId!,
+        );
+      } else {
+        await refreshEntitySearchIndex(
+          transaction,
+          editorialCase.targetEntityId!,
+        );
+      }
+    }
     return {
       status,
       casePublicId: editorialCase.publicId,
@@ -1242,6 +1265,7 @@ export const applyRightsDecision = async (input: RightsDecisionCreateRequest) =>
         publicVisibility: false,
         createdAt: effectiveAt,
       });
+      await refreshEventSearchIndex(transaction, event.id);
       return {
         status: "applied" as const,
         publicId: input.publicId,
@@ -1361,6 +1385,7 @@ export const applyRightsDecision = async (input: RightsDecisionCreateRequest) =>
         publicVisibility: false,
         createdAt: effectiveAt,
       });
+      await refreshEntitySearchIndex(transaction, entity.id);
       return {
         status: "applied" as const,
         publicId: input.publicId,
@@ -1587,6 +1612,7 @@ export const applyRightsDecision = async (input: RightsDecisionCreateRequest) =>
       publicVisibility: false,
       createdAt: effectiveAt,
     });
+    await refreshEventSearchIndex(transaction, event.id);
     return {
       status: "applied" as const,
       publicId: input.publicId,

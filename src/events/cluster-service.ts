@@ -17,6 +17,7 @@ import {
   tombstones,
 } from "@/db/schema";
 import { getPublicTombstone } from "@/operations/service";
+import { refreshEventSearchIndex } from "@/search/indexer";
 import { assessEventCandidate } from "./clustering";
 import type { EventMergeRequest, EventSplitRequest } from "./contracts";
 import { selectRepresentativeSource } from "./representative-source";
@@ -364,6 +365,8 @@ export const mergeEvents = async (input: EventMergeRequest) =>
       internalNote: input.internalNote,
       createdAt: mergedAt,
     });
+    await refreshEventSearchIndex(transaction, source.id);
+    await refreshEventSearchIndex(transaction, target.id);
     return {
       status: "merged" as const,
       sourceEventPublicId: source.publicId,
@@ -679,6 +682,8 @@ export const splitMergedEvent = async (input: EventSplitRequest) =>
       internalNote: input.internalNote,
       createdAt: splitAt,
     });
+    await refreshEventSearchIndex(transaction, source.id);
+    await refreshEventSearchIndex(transaction, target.id);
     return {
       status: "split" as const,
       restoredEventPublicId: source.publicId,

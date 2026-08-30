@@ -47,6 +47,10 @@ import {
   rightsDecisionCreateResponseSchema,
 } from "@/operations/contracts";
 import { statusResponseSchema } from "./status";
+import {
+  searchErrorResponseSchema,
+  searchResponseSchema,
+} from "@/search/contracts";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
 const eventDraftRequest = z.toJSONSchema(eventDraftRequestSchema);
@@ -110,6 +114,8 @@ const operationErrorResponse = z.toJSONSchema(operationErrorResponseSchema);
 const invalidOperationRequestResponse = z.toJSONSchema(
   invalidOperationRequestResponseSchema,
 );
+const searchResponse = z.toJSONSchema(searchResponseSchema);
+const searchErrorResponse = z.toJSONSchema(searchErrorResponseSchema);
 
 const localeParameter = {
   name: "locale",
@@ -148,6 +154,122 @@ export const openApiDocument = {
     },
   },
   paths: {
+    "/api/v1/search": {
+      get: {
+        summary: "Search public Events and Entities without an LLM",
+        parameters: [
+          {
+            name: "q",
+            in: "query",
+            required: true,
+            schema: { type: "string", minLength: 1, maxLength: 200 },
+          },
+          localeParameter,
+          {
+            name: "type",
+            in: "query",
+            required: false,
+            schema: {
+              type: "string",
+              enum: [
+                "all",
+                "event",
+                "model",
+                "paper",
+                "product",
+                "repository",
+                "prompt",
+                "skill",
+                "guide",
+                "organization",
+                "person",
+                "benchmark",
+                "topic",
+              ],
+              default: "all",
+            },
+          },
+          {
+            name: "from",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date-time" },
+          },
+          {
+            name: "to",
+            in: "query",
+            required: false,
+            schema: { type: "string", format: "date-time" },
+          },
+          {
+            name: "topic",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+          {
+            name: "organization",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+          {
+            name: "signalLanguage",
+            in: "query",
+            required: false,
+            description:
+              "Filters source signals, not the language used to present the shared fact.",
+            schema: {
+              type: "string",
+              enum: ["all", "en", "zh"],
+              default: "all",
+            },
+          },
+          {
+            name: "sort",
+            in: "query",
+            required: false,
+            description:
+              "Uses relevance by default. Trending returns Insufficient Evidence until verified trend observations exist.",
+            schema: {
+              type: "string",
+              enum: ["relevance", "latest", "trending"],
+              default: "relevance",
+            },
+          },
+          {
+            name: "limit",
+            in: "query",
+            required: false,
+            schema: {
+              type: "integer",
+              minimum: 1,
+              maximum: 50,
+              default: 20,
+            },
+          },
+          {
+            name: "cursor",
+            in: "query",
+            required: false,
+            description:
+              "Opaque, expiring cursor bound to an immutable result order, the query, filters and data cutoff.",
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Deterministically ranked public Event and Entity results. The immutable cursor snapshot captures at most 1,000 ordered identities and reports truncation explicitly.",
+            content: { "application/json": { schema: searchResponse } },
+          },
+          400: {
+            description: "The Search query or filter is invalid.",
+            content: { "application/json": { schema: searchErrorResponse } },
+          },
+        },
+      },
+    },
     "/api/v1/status": {
       get: {
         summary: "Read public application and database health",
