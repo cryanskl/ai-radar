@@ -13,7 +13,6 @@ import {
   eventMergeResponseSchema,
   eventPublishResponseSchema,
   invalidEventRequestResponseSchema,
-  publicEventListSchema,
   publicEventResponseSchema,
   eventSplitRequestSchema,
   eventSplitPreviewResponseSchema,
@@ -53,10 +52,6 @@ import {
   rightsDecisionCreateResponseSchema,
 } from "@/operations/contracts";
 import { statusResponseSchema } from "./status";
-import {
-  searchErrorResponseSchema,
-  searchResponseSchema,
-} from "@/search/contracts";
 import {
   invalidModelRequestResponseSchema,
   modelErrorResponseSchema,
@@ -126,7 +121,6 @@ import {
   featuredSelectionCreateResponseSchema,
   invalidRankingRequestResponseSchema,
   publicRankingDetailSchema,
-  publicRankingListSchema,
   rankingDefinitionCreateRequestSchema,
   rankingDefinitionCreateResponseSchema,
   rankingErrorResponseSchema,
@@ -149,6 +143,20 @@ import {
   invalidDailyBriefRequestResponseSchema,
   publishedDailyBriefSchema,
 } from "@/daily-briefs/contracts";
+import {
+  publicApiErrorResponseSchema,
+  publicCorrectionListSchema,
+  publicEntityListSchema,
+  publicRelationSchema,
+  publicRelationListSchema,
+  publicReleaseSchema,
+  publicReleaseListSchema,
+  publicTombstoneSchema,
+  publicTombstoneListSchema,
+  versionedPublicEventListSchema,
+  versionedPublicRankingListSchema,
+  versionedSearchResponseSchema,
+} from "@/public-api/contracts";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
 const dailyBriefCreateRequest = z.toJSONSchema(dailyBriefCreateRequestSchema);
@@ -183,7 +191,6 @@ const invalidEventRequestResponse = z.toJSONSchema(
 );
 const eventPublishResponse = z.toJSONSchema(eventPublishResponseSchema);
 const publicEvent = z.toJSONSchema(publicEventResponseSchema);
-const publicEventList = z.toJSONSchema(publicEventListSchema);
 const eventCandidatesResponse = z.toJSONSchema(eventCandidatesResponseSchema);
 const eventMergeRequest = z.toJSONSchema(eventMergeRequestSchema);
 const eventMergeResponse = z.toJSONSchema(eventMergeResponseSchema);
@@ -316,7 +323,6 @@ const featuredSelectionCreateRequest = z.toJSONSchema(
 const featuredSelectionCreateResponse = z.toJSONSchema(
   featuredSelectionCreateResponseSchema,
 );
-const publicRankingList = z.toJSONSchema(publicRankingListSchema);
 const publicRankingDetail = z.toJSONSchema(publicRankingDetailSchema);
 const rankingErrorResponse = z.toJSONSchema(rankingErrorResponseSchema);
 const invalidRankingRequestResponse = z.toJSONSchema(
@@ -351,8 +357,6 @@ const operationErrorResponse = z.toJSONSchema(operationErrorResponseSchema);
 const invalidOperationRequestResponse = z.toJSONSchema(
   invalidOperationRequestResponseSchema,
 );
-const searchResponse = z.toJSONSchema(searchResponseSchema);
-const searchErrorResponse = z.toJSONSchema(searchErrorResponseSchema);
 const askRequest = z.toJSONSchema(askRequestSchema);
 const askResponse = z.toJSONSchema(askResponseSchema);
 const askErrorResponse = z.toJSONSchema(askErrorResponseSchema);
@@ -372,6 +376,281 @@ const modelErrorResponse = z.toJSONSchema(modelErrorResponseSchema);
 const invalidModelRequestResponse = z.toJSONSchema(
   invalidModelRequestResponseSchema,
 );
+const publicApiErrorResponse = z.toJSONSchema(publicApiErrorResponseSchema);
+const publicEntityList = z.toJSONSchema(publicEntityListSchema);
+const publicRelation = z.toJSONSchema(publicRelationSchema);
+const publicRelationList = z.toJSONSchema(publicRelationListSchema);
+const publicCorrectionList = z.toJSONSchema(publicCorrectionListSchema);
+const publicTombstone = z.toJSONSchema(publicTombstoneSchema);
+const publicTombstoneList = z.toJSONSchema(publicTombstoneListSchema);
+const publicRelease = z.toJSONSchema(publicReleaseSchema);
+const publicReleaseList = z.toJSONSchema(publicReleaseListSchema);
+const versionedPublicEventList = z.toJSONSchema(versionedPublicEventListSchema);
+const versionedSearchResponse = z.toJSONSchema(versionedSearchResponseSchema);
+const versionedPublicRankingList = z.toJSONSchema(
+  versionedPublicRankingListSchema,
+);
+
+const publicEvidenceExample = {
+  sourceItemPublicId: "source-item-example",
+  title: "AI Radar example source",
+  url: "https://source.example.test/example",
+  rightsStatus: "open" as const,
+  attribution: "AI Radar example source",
+  licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+  rightsCheckedAt: "2026-08-31T00:00:00.000Z",
+};
+const publicEventExample = publicEventResponseSchema.parse({
+  publicId: "event-example-launch",
+  eventType: "announces",
+  factStatus: "confirmed",
+  publicationState: "published",
+  occurredAt: "2026-08-30T10:00:00.000Z",
+  occurredAtPrecision: "second",
+  discoveredAt: "2026-08-30T10:05:00.000Z",
+  lastVerifiedAt: "2026-08-31T00:00:00.000Z",
+  rightsStatus: "open",
+  sourceStatus: "active",
+  evidenceConfidence: "high",
+  localization: {
+    locale: "en",
+    title: "Example model announced",
+    summary: "A schema-valid example public Event.",
+    authorship: "human_authored",
+    reviewStatus: "reviewed",
+  },
+  sources: [
+    {
+      publicId: "source-example",
+      sourceItemPublicId: "source-item-example",
+      name: "AI Radar example source",
+      tier: "S",
+      originalTitle: "Example model announcement",
+      originalUrl: "https://source.example.test/example",
+      publishedAt: "2026-08-30T10:00:00.000Z",
+      publishedAtPrecision: "second",
+      rightsStatus: "open",
+      rightsCheckedAt: "2026-08-31T00:00:00.000Z",
+      attribution: "AI Radar example source",
+      licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+      isPrimary: true,
+      isOriginalSource: true,
+    },
+  ],
+  entities: [],
+  corrections: [],
+  rightsDecisions: [],
+});
+const publicEntitySummaryExample = publicEntityListSchema.parse({
+  dataVersion: "public-alpha-unreleased",
+  items: [
+    {
+      publicId: "model-example",
+      type: "model",
+      name: "Example Model",
+      summary: "A schema-valid example public Entity.",
+      officialUrl: "https://model.example.test/",
+      rightsStatus: "metadata_only",
+      lastVerifiedAt: "2026-08-31T00:00:00.000Z",
+    },
+  ],
+  nextCursor: null,
+});
+const publicEntityExample = publicEntityResponseSchema.parse({
+  publicId: "model-example",
+  type: "model",
+  officialName: "Example Model",
+  officialUrl: "https://model.example.test/",
+  lifecycleStatus: "active",
+  lastVerifiedAt: "2026-08-31T00:00:00.000Z",
+  rightsStatus: "metadata_only",
+  localization: {
+    locale: "en",
+    name: "Example Model",
+    summary: "A schema-valid example public Entity.",
+    authorship: "human_authored",
+    reviewStatus: "reviewed",
+  },
+  aliases: [],
+  versions: [],
+  outgoingRelations: [],
+  backlinks: [],
+  timeline: [],
+  graph: {
+    nodes: [
+      {
+        nodeId: "entity:model-example",
+        type: "entity",
+        publicId: "model-example",
+        label: "Example Model",
+      },
+    ],
+    edges: [],
+    truncated: false,
+  },
+  corrections: [],
+});
+const publicRelationExample = publicRelationSchema.parse({
+  publicId: "relation-example-announces",
+  predicate: "ANNOUNCES",
+  direction: "subject_to_object",
+  subject: {
+    type: "event",
+    publicId: "event-example-launch",
+    name: "Example model announced",
+  },
+  object: {
+    type: "entity",
+    publicId: "model-example",
+    name: "Example Model",
+  },
+  rightsStatus: "open",
+  validFrom: "2026-08-30T10:00:00.000Z",
+  validTo: null,
+  firstVerifiedAt: "2026-08-31T00:00:00.000Z",
+  lastVerifiedAt: "2026-08-31T00:00:00.000Z",
+  confidence: 100,
+  reviewStatus: "reviewed",
+  evidence: [
+    {
+      sourceItemPublicId: publicEvidenceExample.sourceItemPublicId,
+      sourceName: "AI Radar example source",
+      sourceUrl: publicEvidenceExample.url,
+      rightsStatus: publicEvidenceExample.rightsStatus,
+      attribution: publicEvidenceExample.attribution,
+      licenseUrl: publicEvidenceExample.licenseUrl,
+      rightsCheckedAt: publicEvidenceExample.rightsCheckedAt,
+    },
+  ],
+});
+const publicCorrectionExample = publicCorrectionSchema.parse({
+  publicId: "correction-example",
+  targetType: "event",
+  targetPublicId: "event-example-launch",
+  casePublicId: "case-example",
+  reasonCode: "factual_error",
+  changes: [
+    {
+      field: "fact_status",
+      previousValue: "rumored",
+      correctedValue: "confirmed",
+    },
+  ],
+  evidence: [
+    {
+      sourceItemPublicId: publicEvidenceExample.sourceItemPublicId,
+      originalTitle: publicEvidenceExample.title,
+      originalUrl: publicEvidenceExample.url,
+      rightsStatus: publicEvidenceExample.rightsStatus,
+      attribution: publicEvidenceExample.attribution,
+      licenseUrl: publicEvidenceExample.licenseUrl,
+      rightsCheckedAt: publicEvidenceExample.rightsCheckedAt,
+    },
+  ],
+  effectiveAt: "2026-08-31T01:00:00.000Z",
+  lastVerifiedAt: "2026-08-31T01:00:00.000Z",
+  replacementVersion: "event-example-launch@v2",
+});
+const publicTombstoneExample = publicTombstoneSchema.parse({
+  publicId: "event-example-duplicate",
+  objectType: "event",
+  status: "merged_into",
+  reasonCode: "duplicate_coverage",
+  effectiveAt: "2026-08-31T02:00:00.000Z",
+  replacementPublicId: "event-example-launch",
+  caseReferencePublicId: null,
+});
+const publicSearchExample = versionedSearchResponseSchema.parse({
+  dataVersion: "public-alpha-unreleased",
+  query: "example model",
+  locale: "en",
+  sort: "relevance",
+  rankingState: "available",
+  items: [
+    {
+      kind: "entity",
+      entityType: "model",
+      publicId: "model-example",
+      status: "public",
+      name: "Example Model",
+      summary: "A schema-valid example public Entity.",
+      locale: "en",
+      matchedLocale: "en",
+      matchReason: "official_name",
+      matchedText: "Example Model",
+      occurredAt: null,
+      lastVerifiedAt: "2026-08-31T00:00:00.000Z",
+      source: {
+        name: "Example Model",
+        url: "https://model.example.test/",
+      },
+      signalLanguages: ["en"],
+      replacementPublicId: null,
+    },
+  ],
+  resultSet: { capturedCount: 1, limit: 1000, truncated: false },
+  nextCursor: null,
+  dataCutoff: "2026-08-31T00:00:00.000Z",
+});
+const publicRankingDefinitionExample = {
+  publicId: "ranking-example-latest",
+  targetType: "event" as const,
+  kind: "latest" as const,
+  methodologyVersion: "1.0.0",
+  effectiveAt: "2026-08-31T00:00:00.000Z",
+  title: "Latest AI events",
+  question: "Which public AI events occurred most recently?",
+  eligibility: ["Published, reviewed and rights-cleared Events"],
+  eligibilitySummary: "Only public and rights-cleared Events qualify.",
+  dimensions: ["occurred_at"],
+  method: {
+    kind: "latest" as const,
+    timeField: "occurred_at" as const,
+    tieBreaker: "confidence_then_public_id" as const,
+  },
+  limitations: ["Latest does not mean most important."],
+  rankingState: "available" as const,
+  dataCutoff: "2026-08-31T00:00:00.000Z",
+};
+const publicRankingDetailExample = publicRankingDetailSchema.parse({
+  locale: "en",
+  definition: publicRankingDefinitionExample,
+  observations: [
+    {
+      publicId: "ranking-observation-example",
+      target: {
+        type: "event",
+        publicId: "event-example-launch",
+        name: "Example model announced",
+        versionPublicId: null,
+        versionLabel: null,
+      },
+      observedAt: "2026-08-31T00:00:00.000Z",
+      dataCutoff: "2026-08-31T00:00:00.000Z",
+      candidateTime: "2026-08-30T10:00:00.000Z",
+      rank: 1,
+      score: null,
+      comparison: null,
+      rawMetrics: {},
+      signals: [],
+      confidence: "high",
+      status: "active",
+      evidence: [publicEvidenceExample],
+    },
+  ],
+});
+const publicRankingListExample = versionedPublicRankingListSchema.parse({
+  dataVersion: "public-alpha-unreleased",
+  nextCursor: null,
+  locale: "en",
+  definitions: [publicRankingDefinitionExample],
+  featured: [],
+});
+const publicStatusExample = statusResponseSchema.parse({
+  status: "ok",
+  services: { application: "ok", database: "ok" },
+  checkedAt: "2026-08-31T00:00:00.000Z",
+});
 
 const localeParameter = {
   name: "locale",
@@ -429,14 +708,94 @@ const dailyBriefError = (description: string) => ({
   content: { "application/json": { schema: dailyBriefErrorResponse } },
 });
 
+const publicApiResponseHeaders = {
+  "X-AI-Radar-Data-Version": {
+    $ref: "#/components/headers/PublicDataVersion",
+  },
+  "X-RateLimit-Limit": { $ref: "#/components/headers/RateLimitLimit" },
+  "X-RateLimit-Remaining": {
+    $ref: "#/components/headers/RateLimitRemaining",
+  },
+  "X-RateLimit-Reset": { $ref: "#/components/headers/RateLimitReset" },
+} as const;
+
+const publicApiRateLimitResponse = {
+  description:
+    "The anonymous client exceeded the documented fixed-window quota.",
+  headers: {
+    ...publicApiResponseHeaders,
+    "Retry-After": { $ref: "#/components/headers/RetryAfter" },
+  },
+  content: {
+    "application/json": {
+      schema: publicApiErrorResponse,
+      example: {
+        error: "rate_limit_exceeded",
+        message: "Public API rate limit exceeded",
+      },
+    },
+  },
+} as const;
+
+const publicApiError = (description: string) => ({
+  description,
+  content: { "application/json": { schema: publicApiErrorResponse } },
+});
+
+const boundedPaginationParameters = [
+  {
+    name: "limit",
+    in: "query",
+    required: false,
+    schema: { type: "integer", minimum: 1, maximum: 50, default: 20 },
+  },
+  {
+    name: "cursor",
+    in: "query",
+    required: false,
+    description: "Opaque cursor bound to this resource and filter set.",
+    schema: { type: "string", maxLength: 2000 },
+  },
+] as const;
+
 export const openApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "AI Radar Public API",
     version: "1.0.0-alpha.1",
-    description: "Versioned, rights-aware public contracts for AI Radar.",
+    description:
+      "Versioned, rights-aware public contracts for AI Radar. AI Radar-owned structured data is available under CC BY 4.0. Record-level rights and license fields take precedence for third-party names, links, quotations and metadata; the API license does not relicense source material.",
+    license: {
+      name: "CC BY 4.0 for AI Radar-owned data",
+      url: "https://creativecommons.org/licenses/by/4.0/",
+    },
   },
   components: {
+    headers: {
+      PublicDataVersion: {
+        description: "The stable Public Data version used for this response.",
+        schema: {
+          type: "string",
+          pattern: "^public-[a-z0-9]+(?:-[a-z0-9]+)*$",
+        },
+      },
+      RateLimitLimit: {
+        description: "Requests allowed in the current anonymous window.",
+        schema: { type: "integer", minimum: 1 },
+      },
+      RateLimitRemaining: {
+        description: "Requests remaining in the current anonymous window.",
+        schema: { type: "integer", minimum: 0 },
+      },
+      RateLimitReset: {
+        description: "Unix time in seconds when the current window resets.",
+        schema: { type: "integer", minimum: 1 },
+      },
+      RetryAfter: {
+        description: "Seconds to wait before retrying a rate-limited request.",
+        schema: { type: "integer", minimum: 1 },
+      },
+    },
     securitySchemes: {
       ownerSession: {
         type: "apiKey",
@@ -823,12 +1182,21 @@ export const openApiDocument = {
           200: {
             description:
               "Deterministically ranked public Event and Entity results. The immutable cursor snapshot captures at most 1,000 ordered identities and reports truncation explicitly.",
-            content: { "application/json": { schema: searchResponse } },
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: versionedSearchResponse,
+                example: publicSearchExample,
+              },
+            },
           },
           400: {
             description: "The Search query or filter is invalid.",
-            content: { "application/json": { schema: searchErrorResponse } },
+            content: {
+              "application/json": { schema: publicApiErrorResponse },
+            },
           },
+          429: publicApiRateLimitResponse,
         },
       },
     },
@@ -838,12 +1206,20 @@ export const openApiDocument = {
         responses: {
           200: {
             description: "AI Radar and PostgreSQL are operational.",
-            content: { "application/json": { schema: statusSchema } },
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: statusSchema,
+                example: publicStatusExample,
+              },
+            },
           },
           503: {
             description: "AI Radar is reachable but PostgreSQL is unavailable.",
+            headers: publicApiResponseHeaders,
             content: { "application/json": { schema: statusSchema } },
           },
+          429: publicApiRateLimitResponse,
         },
       },
     },
@@ -1863,19 +2239,27 @@ export const openApiDocument = {
               enum: ["latest", "trending", "benchmark", "value"],
             },
           },
+          ...boundedPaginationParameters,
         ],
         responses: {
           200: {
             description:
               "Current Ranking methods with Data Cutoffs and editorial Featured records without purchasable ranking influence.",
-            content: { "application/json": { schema: publicRankingList } },
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: versionedPublicRankingList,
+                example: publicRankingListExample,
+              },
+            },
           },
           400: {
             description: "The Ranking filters are invalid.",
             content: {
-              "application/json": { schema: invalidRankingRequestResponse },
+              "application/json": { schema: publicApiErrorResponse },
             },
           },
+          429: publicApiRateLimitResponse,
         },
       },
     },
@@ -1902,15 +2286,22 @@ export const openApiDocument = {
           200: {
             description:
               "The question, eligibility, method, limitations, Data Cutoff, evidence and active or insufficient observations.",
-            content: { "application/json": { schema: publicRankingDetail } },
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: publicRankingDetail,
+                example: publicRankingDetailExample,
+              },
+            },
           },
           400: {
             description: "The locale or methodology version is invalid.",
             content: {
-              "application/json": { schema: invalidRankingRequestResponse },
+              "application/json": { schema: publicApiErrorResponse },
             },
           },
-          404: rankingError("The Ranking Definition is not public."),
+          404: publicApiError("The Ranking Definition is not public."),
+          429: publicApiRateLimitResponse,
         },
       },
     },
@@ -2732,13 +3123,143 @@ export const openApiDocument = {
     "/api/v1/events": {
       get: {
         summary: "List published Event records for Radar",
-        parameters: [localeParameter],
+        parameters: [localeParameter, ...boundedPaginationParameters],
         responses: {
           200: {
             description: "Published Events in occurrence-time order.",
-            content: { "application/json": { schema: publicEventList } },
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: versionedPublicEventList,
+                example: {
+                  dataVersion: "public-alpha-unreleased",
+                  items: [publicEventExample],
+                  nextCursor: null,
+                },
+              },
+            },
           },
-          400: eventError("The requested locale is invalid."),
+          400: publicApiError("The locale or pagination is invalid."),
+          429: publicApiRateLimitResponse,
+        },
+      },
+    },
+    "/api/v1/entities": {
+      get: {
+        summary: "List rights-cleared public Entity identities",
+        parameters: [localeParameter, ...boundedPaginationParameters],
+        responses: {
+          200: {
+            description: "A bounded page of reviewed public Entities.",
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: publicEntityList,
+                example: publicEntitySummaryExample,
+              },
+            },
+          },
+          400: publicApiError("The locale or pagination is invalid."),
+          429: publicApiRateLimitResponse,
+        },
+      },
+    },
+    "/api/v1/relations": {
+      get: {
+        summary: "List evidenced public Relations",
+        parameters: [localeParameter, ...boundedPaginationParameters],
+        responses: {
+          200: {
+            description:
+              "A bounded page of reviewed, rights-cleared Relations and provenance.",
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: publicRelationList,
+                example: {
+                  dataVersion: "public-alpha-unreleased",
+                  items: [publicRelationExample],
+                  nextCursor: null,
+                },
+              },
+            },
+          },
+          400: publicApiError("The locale or pagination is invalid."),
+          429: publicApiRateLimitResponse,
+        },
+      },
+    },
+    "/api/v1/corrections": {
+      get: {
+        summary: "List public Correction records",
+        parameters: boundedPaginationParameters,
+        responses: {
+          200: {
+            description: "A bounded page of public Correction history.",
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: publicCorrectionList,
+                example: {
+                  dataVersion: "public-alpha-unreleased",
+                  items: [publicCorrectionExample],
+                  nextCursor: null,
+                },
+              },
+            },
+          },
+          400: publicApiError("The pagination is invalid."),
+          429: publicApiRateLimitResponse,
+        },
+      },
+    },
+    "/api/v1/tombstones": {
+      get: {
+        summary: "List current merged, withdrawn and reviewing Tombstones",
+        parameters: boundedPaginationParameters,
+        responses: {
+          200: {
+            description:
+              "A bounded page of minimal public removal and replacement state.",
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: publicTombstoneList,
+                example: {
+                  dataVersion: "public-alpha-unreleased",
+                  items: [publicTombstoneExample],
+                  nextCursor: null,
+                },
+              },
+            },
+          },
+          400: publicApiError("The pagination is invalid."),
+          429: publicApiRateLimitResponse,
+        },
+      },
+    },
+    "/api/v1/releases": {
+      get: {
+        summary: "List immutable Public Data Release metadata",
+        parameters: boundedPaginationParameters,
+        responses: {
+          200: {
+            description:
+              "A bounded page of canonical release metadata. Empty until the first verified release.",
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: publicReleaseList,
+                example: {
+                  dataVersion: "public-alpha-unreleased",
+                  items: [],
+                  nextCursor: null,
+                },
+              },
+            },
+          },
+          400: publicApiError("The pagination is invalid."),
+          429: publicApiRateLimitResponse,
         },
       },
     },
@@ -2757,10 +3278,57 @@ export const openApiDocument = {
         responses: {
           200: {
             description: "One published Event using the selected localization.",
-            content: { "application/json": { schema: publicEvent } },
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: publicEvent,
+                example: publicEventExample,
+              },
+            },
           },
-          400: eventError("The requested locale is invalid."),
-          404: eventError("The Event is not published."),
+          400: publicApiError("The requested locale is invalid."),
+          404: publicApiError("The Event is not published."),
+          429: publicApiRateLimitResponse,
+        },
+      },
+    },
+    "/api/v1/relations/{publicId}": {
+      get: {
+        summary: "Read one evidenced public Relation",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          localeParameter,
+        ],
+        responses: {
+          200: {
+            description:
+              "One reviewed, rights-cleared Relation and all of its public provenance.",
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: publicRelation,
+                example: publicRelationExample,
+              },
+            },
+          },
+          400: {
+            description: "The requested locale is invalid.",
+            content: {
+              "application/json": { schema: publicApiErrorResponse },
+            },
+          },
+          404: {
+            description: "The Relation is not public.",
+            content: {
+              "application/json": { schema: publicApiErrorResponse },
+            },
+          },
+          429: publicApiRateLimitResponse,
         },
       },
     },
@@ -2779,9 +3347,77 @@ export const openApiDocument = {
           200: {
             description:
               "The changed fields, public Evidence, effective time and replacement version for one Correction.",
-            content: { "application/json": { schema: publicCorrection } },
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: publicCorrection,
+                example: publicCorrectionExample,
+              },
+            },
           },
-          404: operationError("The Correction does not exist."),
+          404: publicApiError("The Correction does not exist."),
+          429: publicApiRateLimitResponse,
+        },
+      },
+    },
+    "/api/v1/tombstones/{publicId}": {
+      get: {
+        summary: "Read one current public Tombstone",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Minimal public removal, review or replacement state for one identity.",
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: publicTombstone,
+                example: publicTombstoneExample,
+              },
+            },
+          },
+          404: {
+            description: "The Tombstone does not exist.",
+            content: {
+              "application/json": { schema: publicApiErrorResponse },
+            },
+          },
+          429: publicApiRateLimitResponse,
+        },
+      },
+    },
+    "/api/v1/releases/{publicId}": {
+      get: {
+        summary: "Read one immutable Public Data Release",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Canonical release metadata, checksum, license and attribution.",
+            headers: publicApiResponseHeaders,
+            content: { "application/json": { schema: publicRelease } },
+          },
+          404: {
+            description: "The Public Data Release does not exist.",
+            content: {
+              "application/json": { schema: publicApiErrorResponse },
+            },
+          },
+          429: publicApiRateLimitResponse,
         },
       },
     },
@@ -2838,12 +3474,19 @@ export const openApiDocument = {
           200: {
             description:
               "The Entity, Versions, Aliases, Relations, Backlinks, timeline and bounded one-hop graph.",
-            content: { "application/json": { schema: publicEntity } },
+            headers: publicApiResponseHeaders,
+            content: {
+              "application/json": {
+                schema: publicEntity,
+                example: publicEntityExample,
+              },
+            },
           },
-          400: entityError(
+          400: publicApiError(
             "The requested locale or Relation predicate is invalid.",
           ),
-          404: entityError("The Entity is not public."),
+          404: publicApiError("The Entity is not public."),
+          429: publicApiRateLimitResponse,
         },
       },
     },

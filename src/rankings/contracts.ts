@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { localeSchema } from "@/events/contracts";
+import { localeSchema, publicRightsStatusSchema } from "@/events/contracts";
 
 const publicIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 const timestampSchema = z.iso.datetime({ offset: true });
@@ -367,6 +367,8 @@ export const rankingListRequestSchema = z
     locale: localeSchema.default("en"),
     targetType: rankingTargetTypeSchema.optional(),
     kind: rankingKindSchema.optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    cursor: z.string().min(1).max(2_000).optional(),
   })
   .strict();
 
@@ -382,6 +384,10 @@ const publicSourceSchema = z
     sourceItemPublicId: publicIdSchema,
     title: z.string().min(1),
     url: httpUrlSchema,
+    rightsStatus: publicRightsStatusSchema,
+    attribution: z.string().min(1),
+    licenseUrl: httpUrlSchema.nullable(),
+    rightsCheckedAt: timestampSchema,
   })
   .strict();
 

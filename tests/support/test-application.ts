@@ -15,6 +15,14 @@ export type TestApplication = {
   stop: () => Promise<void>;
 };
 
+type TestApplicationOptions = {
+  publicApi?: {
+    dataVersion: string;
+    rateLimitRequests: number;
+    rateLimitWindowSeconds: number;
+  };
+};
+
 const getAvailablePort = async () => {
   const server = createServer();
   server.listen(0, "127.0.0.1");
@@ -54,7 +62,9 @@ const waitForHttp = async (url: string, child: ChildProcess) => {
   });
 };
 
-export const startTestApplication = async (): Promise<TestApplication> => {
+export const startTestApplication = async (
+  options: TestApplicationOptions = {},
+): Promise<TestApplication> => {
   const databaseHostPort = await getAvailablePort();
   const database: StartedPostgreSqlContainer = await new PostgreSqlContainer(
     "postgres:17-alpine",
@@ -103,6 +113,14 @@ export const startTestApplication = async (): Promise<TestApplication> => {
           PUBLIC_ORIGIN: url,
           EMAIL_TOKEN_SECRET:
             "test-email-token-secret-with-at-least-32-characters",
+          PUBLIC_DATA_VERSION:
+            options.publicApi?.dataVersion ?? "public-alpha-test",
+          PUBLIC_API_RATE_LIMIT_REQUESTS: String(
+            options.publicApi?.rateLimitRequests ?? 1_000,
+          ),
+          PUBLIC_API_RATE_LIMIT_WINDOW_SECONDS: String(
+            options.publicApi?.rateLimitWindowSeconds ?? 60,
+          ),
         },
         stdio: ["ignore", "pipe", "pipe"],
       },

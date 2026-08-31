@@ -1,9 +1,8 @@
-import {
-  searchErrorResponseSchema,
-  searchRequestSchema,
-  searchResponseSchema,
-} from "@/search/contracts";
+import { searchRequestSchema, searchResponseSchema } from "@/search/contracts";
 import { searchPublicRecords } from "@/search/service";
+import { getPublicApiEnv } from "@/config/server-env";
+import { versionedSearchResponseSchema } from "@/public-api/contracts";
+import { invalidPublicApiRequest } from "@/public-api/response";
 
 export async function GET(request: Request) {
   const parameters = new URL(request.url).searchParams;
@@ -21,28 +20,24 @@ export async function GET(request: Request) {
     cursor: parameters.get("cursor") ?? undefined,
   });
   if (!input.success) {
-    return Response.json(
-      searchErrorResponseSchema.parse({
-        error: "invalid_search_request",
-        issues: input.error.issues.map((issue) => ({
-          path: issue.path.join("."),
-          message: issue.message,
-        })),
-      }),
-      { status: 400 },
+    return invalidPublicApiRequest(
+      "invalid_request",
+      "Public API Search request is invalid",
     );
   }
 
   const result = await searchPublicRecords(input.data);
   if (result.status === "invalid_cursor") {
-    return Response.json(
-      searchErrorResponseSchema.parse({
-        error: "invalid_search_request",
-        issues: [{ path: "cursor", message: "Invalid Search cursor" }],
-      }),
-      { status: 400 },
+    return invalidPublicApiRequest(
+      "invalid_cursor",
+      "Cursor does not match this Public API request",
     );
   }
 
-  return Response.json(searchResponseSchema.parse(result.response));
+  return Response.json(
+    versionedSearchResponseSchema.parse({
+      ...searchResponseSchema.parse(result.response),
+      dataVersion: getPublicApiEnv().PUBLIC_DATA_VERSION,
+    }),
+  );
 }

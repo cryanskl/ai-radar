@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { localeSchema, publicRightsStatusSchema } from "@/events/contracts";
+import { publicEvidenceSchema } from "@/entities/contracts";
 
 const publicIdSchema = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 const timestampSchema = z.iso.datetime({ offset: true });
@@ -156,17 +157,7 @@ export const publicPaperDetailSchema = z
           confidence: z.number().int().min(0).max(100),
           firstVerifiedAt: timestampSchema,
           lastVerifiedAt: timestampSchema,
-          evidence: z
-            .array(
-              z
-                .object({
-                  sourceItemPublicId: publicIdSchema,
-                  originalTitle: z.string().min(1),
-                  originalUrl: urlSchema,
-                })
-                .strict(),
-            )
-            .min(1),
+          evidence: z.array(publicEvidenceSchema).min(1),
         })
         .strict(),
     ),
@@ -180,17 +171,7 @@ export const publicPaperDetailSchema = z
           predicate: z.string().min(1),
           confidence: z.number().int().min(0).max(100),
           lastVerifiedAt: timestampSchema,
-          evidence: z
-            .array(
-              z
-                .object({
-                  sourceItemPublicId: publicIdSchema,
-                  originalTitle: z.string().min(1),
-                  originalUrl: urlSchema,
-                })
-                .strict(),
-            )
-            .min(1),
+          evidence: z.array(publicEvidenceSchema).min(1),
         })
         .strict(),
     ),

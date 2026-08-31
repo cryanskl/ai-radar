@@ -43,6 +43,8 @@ Open these public routes:
 - Published Events API: <http://localhost:3000/api/v1/events?locale=en>
 - OpenAPI 3.1: <http://localhost:3000/api/openapi.json>
 
+External developers can start with the [Public API guide](docs/11-public-api.md) for versioning, bounded cursors, rate limits and data-rights boundaries.
+
 ## GitHub Owner authentication
 
 Create a GitHub OAuth App and set its callback URL to:

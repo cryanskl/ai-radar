@@ -36,6 +36,23 @@ const emailEnvSchema = z.discriminatedUnion("EMAIL_PROVIDER", [
   }),
 ]);
 
+const publicApiEnvSchema = z.object({
+  PUBLIC_DATA_VERSION: z
+    .string()
+    .regex(/^public-[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .default("public-alpha-unreleased"),
+  PUBLIC_API_RATE_LIMIT_REQUESTS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60),
+  PUBLIC_API_RATE_LIMIT_WINDOW_SECONDS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(60),
+});
+
 export const getDatabaseEnv = () =>
   databaseEnvSchema.parse({
     DATABASE_URL: process.env.DATABASE_URL,
@@ -64,4 +81,12 @@ export const getEmailEnv = () =>
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_FROM: process.env.RESEND_FROM,
     RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+  });
+
+export const getPublicApiEnv = () =>
+  publicApiEnvSchema.parse({
+    PUBLIC_DATA_VERSION: process.env.PUBLIC_DATA_VERSION,
+    PUBLIC_API_RATE_LIMIT_REQUESTS: process.env.PUBLIC_API_RATE_LIMIT_REQUESTS,
+    PUBLIC_API_RATE_LIMIT_WINDOW_SECONDS:
+      process.env.PUBLIC_API_RATE_LIMIT_WINDOW_SECONDS,
   });

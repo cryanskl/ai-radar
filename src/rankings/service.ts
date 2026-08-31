@@ -854,39 +854,57 @@ type ObservationRow = {
     sourceItemPublicId: string;
     title: string;
     url: string;
+    rightsStatus: string;
+    attribution: string;
+    licenseUrl: string | null;
+    rightsCheckedAt: string;
   }>;
 };
 
 const readDefinitions = async (
   locale: "en" | "zh",
-  filters: { targetType?: string; kind?: string; publicId?: string },
+  filters: {
+    targetType?: string;
+    kind?: string;
+    publicId?: string;
+    afterPublicId?: string;
+    limit: number;
+  },
 ) =>
   databasePool.query<DefinitionRow>(
-    `select distinct on (definition.id)
-       definition.public_id, definition.target_type::text,
-       definition.kind::text, version.methodology_version,
-       version.effective_at, version.eligibility, version.dimensions,
-       version.method, localization.title, localization.question,
-       localization.eligibility_summary, localization.limitations
-     from ranking_definitions definition
-     join ranking_definition_versions version on version.definition_id = definition.id
-       and version.public_visibility = true
-       and version.effective_at <= clock_timestamp()
-     join ranking_definition_localized_contents localization
-       on localization.ranking_definition_version_id = version.id
-       and localization.locale = $1::content_locale
-       and localization.review_status = 'reviewed'
-       and localization.public_visibility = true
-     where definition.public_visibility = true
-       and ($2::ranking_target_type is null or definition.target_type = $2)
-       and ($3::ranking_kind is null or definition.kind = $3)
-       and ($4::text is null or definition.public_id = $4)
-     order by definition.id, version.effective_at desc, version.methodology_version desc`,
+    `with current_definitions as (
+       select distinct on (definition.id)
+         definition.public_id, definition.target_type::text,
+         definition.kind::text, version.methodology_version,
+         version.effective_at, version.eligibility, version.dimensions,
+         version.method, localization.title, localization.question,
+         localization.eligibility_summary, localization.limitations
+       from ranking_definitions definition
+       join ranking_definition_versions version on version.definition_id = definition.id
+         and version.public_visibility = true
+         and version.effective_at <= clock_timestamp()
+       join ranking_definition_localized_contents localization
+         on localization.ranking_definition_version_id = version.id
+         and localization.locale = $1::content_locale
+         and localization.review_status = 'reviewed'
+         and localization.public_visibility = true
+       where definition.public_visibility = true
+         and ($2::ranking_target_type is null or definition.target_type = $2)
+         and ($3::ranking_kind is null or definition.kind = $3)
+         and ($4::text is null or definition.public_id = $4)
+         and ($5::text is null or definition.public_id > $5)
+       order by definition.id, version.effective_at desc, version.methodology_version desc
+     )
+     select * from current_definitions
+     order by public_id
+     limit $6`,
     [
       locale,
       filters.targetType ?? null,
       filters.kind ?? null,
       filters.publicId ?? null,
+      filters.afterPublicId ?? null,
+      filters.limit,
     ],
   );
 
@@ -975,7 +993,11 @@ const readObservations = async (
        jsonb_agg(jsonb_build_object(
          'sourceItemPublicId', evidence_source.public_id,
          'title', evidence_source.original_title,
-         'url', evidence_source.original_url
+         'url', evidence_source.original_url,
+         'rightsStatus', evidence_source.rights_status::text,
+         'attribution', evidence_source.attribution,
+         'licenseUrl', evidence_source.license_url,
+         'rightsCheckedAt', to_char(evidence_source.rights_checked_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
        ) order by evidence_source.public_id) as evidence
      from current_observations observation
      join ranking_definition_versions version
@@ -1044,6 +1066,9 @@ const readObservations = async (
        and evidence_source.rights_status in (
          'open', 'attribution_required', 'source_license', 'metadata_only', 'link_only'
        )
+     join sources evidence_parent_source
+       on evidence_parent_source.id = evidence_source.source_id
+      and evidence_parent_source.access_status in ('approved', 'approved_limited')
      where coalesce(target_event.public_id, target_entity.public_id) is not null
        and (
          observation.benchmark_run_id is null
@@ -1201,7 +1226,11 @@ const rankedObservations = (
   }));
 };
 
-const readFeatured = async (locale: "en" | "zh", targetType?: string) =>
+const readFeatured = async (
+  locale: "en" | "zh",
+  limit: number,
+  targetType?: string,
+) =>
   databasePool.query<{
     public_id: string;
     target_type: FeaturedSelectionCreateRequest["target"]["type"];
@@ -1220,6 +1249,10 @@ const readFeatured = async (locale: "en" | "zh", targetType?: string) =>
       sourceItemPublicId: string;
       title: string;
       url: string;
+      rightsStatus: string;
+      attribution: string;
+      licenseUrl: string | null;
+      rightsCheckedAt: string;
     }>;
   }>(
     `select selection.public_id, selection.target_type::text,
@@ -1232,7 +1265,11 @@ const readFeatured = async (locale: "en" | "zh", targetType?: string) =>
        jsonb_agg(jsonb_build_object(
          'sourceItemPublicId', evidence_source.public_id,
          'title', evidence_source.original_title,
-         'url', evidence_source.original_url
+         'url', evidence_source.original_url,
+         'rightsStatus', evidence_source.rights_status::text,
+         'attribution', evidence_source.attribution,
+         'licenseUrl', evidence_source.license_url,
+         'rightsCheckedAt', to_char(evidence_source.rights_checked_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
        ) order by evidence_source.public_id) as evidence
      from featured_selections selection
      join featured_selection_localized_contents localization
@@ -1269,6 +1306,9 @@ const readFeatured = async (locale: "en" | "zh", targetType?: string) =>
        and evidence_source.rights_status in (
          'open', 'attribution_required', 'source_license', 'metadata_only', 'link_only'
        )
+     join sources evidence_parent_source
+       on evidence_parent_source.id = evidence_source.source_id
+      and evidence_parent_source.access_status in ('approved', 'approved_limited')
      where selection.public_visibility = true
        and selection.review_due_at > clock_timestamp()
        and ($2::ranking_target_type is null or selection.target_type = $2)
@@ -1281,12 +1321,19 @@ const readFeatured = async (locale: "en" | "zh", targetType?: string) =>
        select count(*) from featured_selection_evidence all_evidence
        where all_evidence.featured_selection_id = selection.id
      )
-     order by selection.selected_at desc, selection.public_id`,
-    [locale, targetType ?? null],
+     order by selection.selected_at desc, selection.public_id
+     limit $3`,
+    [locale, targetType ?? null, limit],
   );
 
-export const listPublicRankings = async (input: RankingListRequest) => {
-  const definitions = await readDefinitions(input.locale, input);
+export const listPublicRankings = async (
+  input: RankingListRequest,
+  afterPublicId?: string,
+) => {
+  const definitions = await readDefinitions(input.locale, {
+    ...input,
+    afterPublicId,
+  });
   const publicDefinitions = await Promise.all(
     definitions.rows.map(async (row) => {
       const observations = await readObservations(
@@ -1297,7 +1344,11 @@ export const listPublicRankings = async (input: RankingListRequest) => {
       return publicDefinition(row, observations);
     }),
   );
-  const featured = await readFeatured(input.locale, input.targetType);
+  const featured = await readFeatured(
+    input.locale,
+    input.limit,
+    input.targetType,
+  );
   return publicRankingListSchema.parse({
     locale: input.locale,
     definitions: publicDefinitions,

@@ -129,6 +129,7 @@ const publicSourceSchema = z
     publishedAt: timestampSchema,
     publishedAtPrecision: z.enum(["day", "minute", "second"]),
     rightsStatus: publicRightsStatusSchema,
+    rightsCheckedAt: timestampSchema,
     attribution: z.string().min(1),
     licenseUrl: httpUrlSchema.nullable(),
     isPrimary: z.boolean(),

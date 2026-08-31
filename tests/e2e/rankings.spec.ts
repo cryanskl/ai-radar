@@ -823,6 +823,14 @@ test("publishes versioned Rankings and keeps Featured editorially separate", asy
           },
           priceRecord: null,
         },
+        evidence: [
+          {
+            rightsStatus: "open",
+            attribution: expect.any(String),
+            licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+            rightsCheckedAt: expect.any(String),
+          },
+        ],
       },
       {
         target: { versionPublicId: "model-ranking-family-v2" },
@@ -1303,6 +1311,34 @@ test("publishes versioned Rankings and keeps Featured editorially separate", asy
   ]);
   expect(listBody.featured[0]).not.toHaveProperty("rank");
   expect(listBody.featured[0]).not.toHaveProperty("score");
+
+  const firstRankingPage = await context.request.get(
+    `${applicationUrl}/api/v1/rankings?locale=en&limit=1`,
+  );
+  expect(firstRankingPage.status(), await firstRankingPage.text()).toBe(200);
+  const firstRankingPageBody = await firstRankingPage.json();
+  expect(firstRankingPageBody.definitions).toHaveLength(1);
+  expect(firstRankingPageBody.nextCursor).toEqual(expect.any(String));
+  expect(firstRankingPageBody.featured.length).toBeLessThanOrEqual(1);
+
+  const secondRankingPage = await context.request.get(
+    `${applicationUrl}/api/v1/rankings?locale=en&limit=1&cursor=${encodeURIComponent(firstRankingPageBody.nextCursor)}`,
+  );
+  expect(secondRankingPage.status(), await secondRankingPage.text()).toBe(200);
+  const secondRankingPageBody = await secondRankingPage.json();
+  expect(secondRankingPageBody.definitions).toHaveLength(1);
+  expect(secondRankingPageBody.definitions[0].publicId).not.toBe(
+    firstRankingPageBody.definitions[0].publicId,
+  );
+
+  const mismatchedRankingCursor = await context.request.get(
+    `${applicationUrl}/api/v1/rankings?locale=zh&limit=1&cursor=${encodeURIComponent(firstRankingPageBody.nextCursor)}`,
+  );
+  expect(mismatchedRankingCursor.status()).toBe(400);
+  expect(await mismatchedRankingCursor.json()).toEqual({
+    error: "invalid_cursor",
+    message: "Cursor does not match this Public API request",
+  });
 
   await page.goto(`${applicationUrl}/en/rankings`);
   await expect(

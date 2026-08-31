@@ -1,5 +1,9 @@
 import { rankingDetailRequestSchema } from "@/rankings/contracts";
 import { getPublicRanking } from "@/rankings/service";
+import {
+  invalidPublicApiRequest,
+  publicApiNotFound,
+} from "@/public-api/response";
 
 export async function GET(
   request: Request,
@@ -9,14 +13,14 @@ export async function GET(
     Object.fromEntries(new URL(request.url).searchParams.entries()),
   );
   if (!parsed.success) {
-    return Response.json(
-      { error: "invalid_request", issues: parsed.error.issues },
-      { status: 400 },
+    return invalidPublicApiRequest(
+      "invalid_request",
+      "Public API Ranking request is invalid",
     );
   }
   const { publicId } = await context.params;
   const result = await getPublicRanking(publicId, parsed.data);
   return result
     ? Response.json(result)
-    : Response.json({ error: "not_found" }, { status: 404 });
+    : publicApiNotFound("Ranking was not found");
 }

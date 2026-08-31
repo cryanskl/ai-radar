@@ -116,7 +116,7 @@ export const getHomepageData = async (locale: Locale, view: HomepageView) => {
     listPublicPrompts(promptListRequestSchema.parse({ locale, limit: 4 })),
     listPublicSkills(skillListRequestSchema.parse({ locale })),
     listPublicGuides(guideListRequestSchema.parse({ locale })),
-    listPublicRankings({ locale }),
+    listPublicRankings({ locale, limit: 20 }),
     listPublicTopics(locale),
     listPublicEvents(locale, 5),
   ]);

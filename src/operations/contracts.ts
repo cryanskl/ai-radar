@@ -147,6 +147,16 @@ const correctionEvidenceSchema = z
     sourceItemPublicId: publicIdSchema,
     originalTitle: z.string().min(1),
     originalUrl: httpUrlSchema,
+    rightsStatus: rightsStatusSchema.extract([
+      "open",
+      "attribution_required",
+      "source_license",
+      "metadata_only",
+      "link_only",
+    ]),
+    attribution: z.string().min(1),
+    licenseUrl: httpUrlSchema.nullable(),
+    rightsCheckedAt: timestampSchema,
   })
   .strict();
 
@@ -160,6 +170,7 @@ const publicCorrectionDetailsSchema = z
     changes: z.array(correctionChangeSchema).min(1),
     evidence: z.array(correctionEvidenceSchema),
     effectiveAt: timestampSchema,
+    lastVerifiedAt: timestampSchema,
     replacementVersion: z.string().min(1),
   })
   .strict();
@@ -172,6 +183,7 @@ const publicRedactedCorrectionSchema = z
     reasonCode: z.literal("factual_error"),
     status: z.literal("redacted_due_to_rights"),
     effectiveAt: timestampSchema,
+    lastVerifiedAt: timestampSchema,
     replacementVersion: z.string().min(1),
   })
   .strict();

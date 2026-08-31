@@ -5,6 +5,10 @@ import {
 import { getPublicEntity } from "@/entities/service";
 import { localeSchema } from "@/events/contracts";
 import { getPublicTombstone } from "@/operations/service";
+import {
+  invalidPublicApiRequest,
+  publicApiNotFound,
+} from "@/public-api/response";
 
 export async function GET(
   request: Request,
@@ -13,14 +17,20 @@ export async function GET(
   const url = new URL(request.url);
   const locale = localeSchema.safeParse(url.searchParams.get("locale") ?? "en");
   if (!locale.success) {
-    return Response.json({ error: "invalid_locale" }, { status: 400 });
+    return invalidPublicApiRequest(
+      "invalid_request",
+      "Public API locale is invalid",
+    );
   }
   const requestedPredicate = url.searchParams.get("predicate");
   const predicate = requestedPredicate
     ? relationTypeSchema.safeParse(requestedPredicate)
     : undefined;
   if (predicate && !predicate.success) {
-    return Response.json({ error: "invalid_relation_type" }, { status: 400 });
+    return invalidPublicApiRequest(
+      "invalid_request",
+      "Public API Relation predicate is invalid",
+    );
   }
   const entity = await getPublicEntity(
     (await params).publicId,
@@ -30,7 +40,7 @@ export async function GET(
   if (entity) return Response.json(publicEntityResponseSchema.parse(entity));
   const tombstone = await getPublicTombstone("entity", (await params).publicId);
   if (!tombstone) {
-    return Response.json({ error: "not_found" }, { status: 404 });
+    return publicApiNotFound("Entity was not found");
   }
   return Response.json(publicEntityResponseSchema.parse(tombstone));
 }

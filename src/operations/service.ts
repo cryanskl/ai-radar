@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { database } from "@/db/client";
 import { selectRepresentativeSource } from "@/events/representative-source";
 import {
@@ -38,6 +38,14 @@ import {
   refreshEntitySearchIndex,
   refreshEventSearchIndex,
 } from "@/search/indexer";
+
+const publicRights = [
+  "open",
+  "attribution_required",
+  "source_license",
+  "metadata_only",
+  "link_only",
+] as const;
 
 type Change = {
   field: string;
@@ -130,6 +138,10 @@ const publicCorrectionDetails = async (
         sourceItemPublicId: sourceItems.publicId,
         originalTitle: sourceItems.originalTitle,
         originalUrl: sourceItems.originalUrl,
+        rightsStatus: sourceItems.rightsStatus,
+        attribution: sourceItems.attribution,
+        licenseUrl: sourceItems.licenseUrl,
+        rightsCheckedAt: sourceItems.rightsCheckedAt,
       })
       .from(correctionEvidence)
       .innerJoin(
@@ -137,11 +149,24 @@ const publicCorrectionDetails = async (
         and(
           eq(sourceItems.id, correctionEvidence.sourceItemId),
           eq(sourceItems.publicVisibility, true),
+          inArray(sourceItems.rightsStatus, [...publicRights]),
+        ),
+      )
+      .innerJoin(
+        sources,
+        and(
+          eq(sources.id, sourceItems.sourceId),
+          inArray(sources.accessStatus, ["approved", "approved_limited"]),
         ),
       )
       .where(eq(correctionEvidence.correctionId, correction.id))
       .orderBy(sourceItems.publicId),
   ]);
+  const [{ count: evidenceCount }] = await database
+    .select({ count: sql<number>`count(*)::int` })
+    .from(correctionEvidence)
+    .where(eq(correctionEvidence.correctionId, correction.id));
+  if (evidence.length !== evidenceCount) return null;
   return {
     publicId: correction.publicId,
     targetType: correction.targetType,
@@ -154,8 +179,12 @@ const publicCorrectionDetails = async (
     )[0].publicId,
     reasonCode: correction.reasonCode,
     changes,
-    evidence,
+    evidence: evidence.map(({ rightsCheckedAt, ...item }) => ({
+      ...item,
+      rightsCheckedAt: rightsCheckedAt.toISOString(),
+    })),
     effectiveAt: correction.effectiveAt.toISOString(),
+    lastVerifiedAt: correction.effectiveAt.toISOString(),
     replacementVersion: correction.replacementVersion,
   };
 };
@@ -169,14 +198,23 @@ export const getPublicCorrection = async (publicId: string) => {
   const [target] =
     correction.targetType === "event"
       ? await database
-          .select({ publicVisibility: events.publicVisibility })
+          .select({
+            publicVisibility: events.publicVisibility,
+            rightsStatus: events.rightsStatus,
+          })
           .from(events)
           .where(eq(events.id, correction.targetEventId!))
       : await database
-          .select({ publicVisibility: entities.publicVisibility })
+          .select({
+            publicVisibility: entities.publicVisibility,
+            rightsStatus: entities.rightsStatus,
+          })
           .from(entities)
           .where(eq(entities.id, correction.targetEntityId!));
-  if (!target.publicVisibility) {
+  if (
+    !target.publicVisibility ||
+    !publicRights.includes(target.rightsStatus as (typeof publicRights)[number])
+  ) {
     return {
       publicId: correction.publicId,
       targetType: correction.targetType,
@@ -190,10 +228,29 @@ export const getPublicCorrection = async (publicId: string) => {
       reasonCode: correction.reasonCode,
       status: "redacted_due_to_rights" as const,
       effectiveAt: correction.effectiveAt.toISOString(),
+      lastVerifiedAt: correction.effectiveAt.toISOString(),
       replacementVersion: correction.replacementVersion,
     };
   }
-  return publicCorrectionDetails(correction);
+  const details = await publicCorrectionDetails(correction);
+  return (
+    details ?? {
+      publicId: correction.publicId,
+      targetType: correction.targetType,
+      targetPublicId: correction.targetPublicId,
+      casePublicId: (
+        await database
+          .select({ publicId: editorialCases.publicId })
+          .from(editorialCases)
+          .where(eq(editorialCases.id, correction.caseId))
+      )[0].publicId,
+      reasonCode: correction.reasonCode,
+      status: "redacted_due_to_rights" as const,
+      effectiveAt: correction.effectiveAt.toISOString(),
+      lastVerifiedAt: correction.effectiveAt.toISOString(),
+      replacementVersion: correction.replacementVersion,
+    }
+  );
 };
 
 export const getPublicCorrectionsForEvent = async (eventPublicId: string) => {
@@ -203,9 +260,10 @@ export const getPublicCorrectionsForEvent = async (eventPublicId: string) => {
     .innerJoin(events, eq(events.id, corrections.targetEventId))
     .where(eq(events.publicId, eventPublicId))
     .orderBy(corrections.effectiveAt, corrections.publicId);
-  return Promise.all(
+  const publicCorrections = await Promise.all(
     records.map(({ correction }) => publicCorrectionDetails(correction)),
   );
+  return publicCorrections.filter((correction) => correction !== null);
 };
 
 export const getPublicCorrectionsForEntity = async (entityId: string) => {
@@ -214,7 +272,10 @@ export const getPublicCorrectionsForEntity = async (entityId: string) => {
     .from(corrections)
     .where(eq(corrections.targetEntityId, entityId))
     .orderBy(corrections.effectiveAt, corrections.publicId);
-  return Promise.all(records.map(publicCorrectionDetails));
+  const publicCorrections = await Promise.all(
+    records.map(publicCorrectionDetails),
+  );
+  return publicCorrections.filter((correction) => correction !== null);
 };
 
 export const getPublicRightsDecisionsForEvent = async (

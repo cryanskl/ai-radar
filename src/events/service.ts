@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, lt, or } from "drizzle-orm";
 import { database } from "@/db/client";
 import {
   eventPublicationAudits,
@@ -23,6 +23,13 @@ import {
 import { refreshEventSearchIndex } from "@/search/indexer";
 
 const approvedSourceAccessStatuses = new Set(["approved", "approved_limited"]);
+const publicRights = [
+  "open",
+  "attribution_required",
+  "source_license",
+  "metadata_only",
+  "link_only",
+] as const;
 
 const fulfillsRightsRequirements = (
   rightsStatus: EventDraftRequest["sourceItem"]["rightsStatus"],
@@ -352,24 +359,45 @@ const selectPublicEventRows = async (
   locale: "en" | "zh",
   publicId?: string,
   limit?: number,
+  after?: { occurredAt: Date; publicId: string },
 ) => {
   const candidateIds =
     publicId || limit === undefined
       ? null
       : await database
-          .select({ id: events.id })
+          .selectDistinct({
+            id: events.id,
+            occurredAt: events.occurredAt,
+            publicId: events.publicId,
+          })
           .from(events)
           .innerJoin(
             localizedContents,
             eq(localizedContents.eventId, events.id),
           )
+          .innerJoin(eventSources, eq(eventSources.eventId, events.id))
+          .innerJoin(sourceItems, eq(sourceItems.id, eventSources.sourceItemId))
+          .innerJoin(sources, eq(sources.id, sourceItems.sourceId))
           .where(
             and(
               eq(events.publicationState, "published"),
               eq(events.publicVisibility, true),
+              inArray(events.rightsStatus, [...publicRights]),
               eq(localizedContents.locale, locale),
               eq(localizedContents.reviewStatus, "reviewed"),
               eq(localizedContents.publicVisibility, true),
+              eq(sourceItems.publicVisibility, true),
+              inArray(sourceItems.rightsStatus, [...publicRights]),
+              inArray(sources.accessStatus, ["approved", "approved_limited"]),
+              after
+                ? or(
+                    lt(events.occurredAt, after.occurredAt),
+                    and(
+                      eq(events.occurredAt, after.occurredAt),
+                      gt(events.publicId, after.publicId),
+                    ),
+                  )
+                : undefined,
             ),
           )
           .orderBy(desc(events.occurredAt), events.publicId)
@@ -400,6 +428,7 @@ const selectPublicEventRows = async (
       sourcePublishedAt: sourceItems.publishedAt,
       sourcePublishedAtPrecision: sourceItems.publishedAtPrecision,
       sourceRightsStatus: sourceItems.rightsStatus,
+      sourceRightsCheckedAt: sourceItems.rightsCheckedAt,
       sourceAttribution: sourceItems.attribution,
       sourceLicenseUrl: sourceItems.licenseUrl,
       sourceIsPrimary: eventSources.isPrimary,
@@ -414,10 +443,13 @@ const selectPublicEventRows = async (
       and(
         eq(events.publicationState, "published"),
         eq(events.publicVisibility, true),
+        inArray(events.rightsStatus, [...publicRights]),
         eq(localizedContents.locale, locale),
         eq(localizedContents.reviewStatus, "reviewed"),
         eq(localizedContents.publicVisibility, true),
         eq(sourceItems.publicVisibility, true),
+        inArray(sourceItems.rightsStatus, [...publicRights]),
+        inArray(sources.accessStatus, ["approved", "approved_limited"]),
         publicId ? eq(events.publicId, publicId) : undefined,
         candidateIds
           ? inArray(
@@ -468,6 +500,7 @@ const mapPublicEvents = (
         publishedAt: string;
         publishedAtPrecision: (typeof rows)[number]["sourcePublishedAtPrecision"];
         rightsStatus: (typeof rows)[number]["sourceRightsStatus"];
+        rightsCheckedAt: string;
         attribution: string;
         licenseUrl: string | null;
         isPrimary: boolean;
@@ -526,6 +559,7 @@ const mapPublicEvents = (
       publishedAt: row.sourcePublishedAt.toISOString(),
       publishedAtPrecision: row.sourcePublishedAtPrecision,
       rightsStatus: row.sourceRightsStatus,
+      rightsCheckedAt: row.sourceRightsCheckedAt.toISOString(),
       attribution: row.sourceAttribution,
       licenseUrl: row.sourceLicenseUrl,
       isPrimary: row.sourceIsPrimary,
@@ -568,6 +602,7 @@ const attachPublicEntities = async (
     )
     .innerJoin(relationEvidence, eq(relationEvidence.relationId, relations.id))
     .innerJoin(sourceItems, eq(sourceItems.id, relationEvidence.sourceItemId))
+    .innerJoin(sources, eq(sources.id, sourceItems.sourceId))
     .where(
       and(
         inArray(
@@ -576,9 +611,15 @@ const attachPublicEntities = async (
         ),
         eq(relations.publicVisibility, true),
         eq(relations.reviewStatus, "reviewed"),
+        inArray(relations.rightsStatus, [...publicRights]),
         eq(entities.publicVisibility, true),
+        eq(entities.lifecycleStatus, "active"),
+        inArray(entities.rightsStatus, [...publicRights]),
         eq(entityLocalizedContents.publicVisibility, true),
+        eq(entityLocalizedContents.reviewStatus, "reviewed"),
         eq(sourceItems.publicVisibility, true),
+        inArray(sourceItems.rightsStatus, [...publicRights]),
+        inArray(sources.accessStatus, ["approved", "approved_limited"]),
       ),
     );
   const eventByPublicId = new Map(
@@ -629,9 +670,13 @@ const attachOperationalHistory = async (
   return mappedEvents;
 };
 
-export const listPublicEvents = async (locale: "en" | "zh", limit?: number) => {
+export const listPublicEvents = async (
+  locale: "en" | "zh",
+  limit?: number,
+  after?: { occurredAt: Date; publicId: string },
+) => {
   const events = mapPublicEvents(
-    await selectPublicEventRows(locale, undefined, limit),
+    await selectPublicEventRows(locale, undefined, limit, after),
   );
   await Promise.all([
     attachPublicEntities(events, locale),

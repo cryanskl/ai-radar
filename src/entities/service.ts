@@ -12,11 +12,20 @@ import {
   relationEvidence,
   relations,
   sourceItems,
+  sources,
 } from "@/db/schema";
 import { publicRightsStatusSchema } from "@/events/contracts";
 import type { EntityCreateRequest, RelationCreateRequest } from "./contracts";
 import { getPublicCorrectionsForEntity } from "@/operations/service";
 import { refreshEntitySearchIndex } from "@/search/indexer";
+
+const publicRights = [
+  "open",
+  "attribution_required",
+  "source_license",
+  "metadata_only",
+  "link_only",
+] as const;
 
 export const normalizeEntityAlias = (value: string) =>
   value.normalize("NFKC").trim().toLocaleLowerCase();
@@ -346,6 +355,7 @@ const publicRelationRows = (
       and(
         eq(relations.publicVisibility, true),
         eq(relations.reviewStatus, "reviewed"),
+        inArray(relations.rightsStatus, [...publicRights]),
         or(
           eq(relations.subjectEntityId, entityId),
           eq(relations.objectEntityId, entityId),
@@ -386,6 +396,7 @@ export const getPublicEntity = async (
         eq(entities.publicId, publicId),
         eq(entities.lifecycleStatus, "active"),
         eq(entities.publicVisibility, true),
+        inArray(entities.rightsStatus, [...publicRights]),
         eq(entityLocalizedContents.locale, locale),
         eq(entityLocalizedContents.reviewStatus, "reviewed"),
         eq(entityLocalizedContents.publicVisibility, true),
@@ -469,6 +480,7 @@ export const getPublicEntity = async (
             and(
               inArray(entities.id, entityIds),
               eq(entities.publicVisibility, true),
+              inArray(entities.rightsStatus, [...publicRights]),
             ),
           ),
     eventIds.length === 0
@@ -494,6 +506,7 @@ export const getPublicEntity = async (
             and(
               inArray(events.id, eventIds),
               eq(events.publicVisibility, true),
+              inArray(events.rightsStatus, [...publicRights]),
             ),
           ),
     relationIds.length === 0
@@ -504,6 +517,10 @@ export const getPublicEntity = async (
             sourceItemPublicId: sourceItems.publicId,
             originalTitle: sourceItems.originalTitle,
             originalUrl: sourceItems.originalUrl,
+            rightsStatus: sourceItems.rightsStatus,
+            attribution: sourceItems.attribution,
+            licenseUrl: sourceItems.licenseUrl,
+            rightsCheckedAt: sourceItems.rightsCheckedAt,
           })
           .from(relationEvidence)
           .innerJoin(
@@ -511,6 +528,14 @@ export const getPublicEntity = async (
             and(
               eq(sourceItems.id, relationEvidence.sourceItemId),
               eq(sourceItems.publicVisibility, true),
+              inArray(sourceItems.rightsStatus, [...publicRights]),
+            ),
+          )
+          .innerJoin(
+            sources,
+            and(
+              eq(sources.id, sourceItems.sourceId),
+              inArray(sources.accessStatus, ["approved", "approved_limited"]),
             ),
           )
           .where(inArray(relationEvidence.relationId, relationIds)),
@@ -534,7 +559,12 @@ export const getPublicEntity = async (
       : relation.subjectEventId
         ? eventNameById.get(relation.subjectEventId)
         : undefined;
-    const evidence = evidenceByRelationId.get(relation.id) ?? [];
+    const evidence = (evidenceByRelationId.get(relation.id) ?? []).map(
+      ({ rightsCheckedAt, ...item }) => ({
+        ...item,
+        rightsCheckedAt: rightsCheckedAt.toISOString(),
+      }),
+    );
     if (!object || !subject || evidence.length === 0) return [];
     return [
       {
@@ -563,10 +593,22 @@ export const getPublicEntity = async (
         confidence: relation.confidence,
         reviewStatus: "reviewed" as const,
         evidence: evidence.map(
-          ({ sourceItemPublicId, originalTitle, originalUrl }) => ({
+          ({
             sourceItemPublicId,
             originalTitle,
             originalUrl,
+            rightsStatus,
+            attribution,
+            licenseUrl,
+            rightsCheckedAt,
+          }) => ({
+            sourceItemPublicId,
+            originalTitle,
+            originalUrl,
+            rightsStatus: publicRightsStatusSchema.parse(rightsStatus),
+            attribution,
+            licenseUrl,
+            rightsCheckedAt,
           }),
         ),
       },

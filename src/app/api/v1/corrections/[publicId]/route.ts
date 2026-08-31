@@ -1,5 +1,6 @@
 import { publicCorrectionSchema } from "@/operations/contracts";
 import { getPublicCorrection } from "@/operations/service";
+import { publicApiNotFound } from "@/public-api/response";
 
 export async function GET(
   _request: Request,
@@ -7,7 +8,7 @@ export async function GET(
 ) {
   const correction = await getPublicCorrection((await params).publicId);
   if (!correction) {
-    return Response.json({ error: "not_found" }, { status: 404 });
+    return publicApiNotFound("Correction was not found");
   }
   return Response.json(publicCorrectionSchema.parse(correction));
 }

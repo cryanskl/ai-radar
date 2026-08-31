@@ -172,11 +172,15 @@ const publicEndpointSchema = z
     name: z.string().min(1),
   })
   .strict();
-const publicEvidenceSchema = z
+export const publicEvidenceSchema = z
   .object({
     sourceItemPublicId: publicIdSchema,
     originalTitle: z.string().min(1),
     originalUrl: httpUrlSchema,
+    rightsStatus: publicRightsStatusSchema,
+    attribution: z.string().min(1),
+    licenseUrl: httpUrlSchema.nullable(),
+    rightsCheckedAt: timestampSchema,
   })
   .strict();
 const publicRelationSchema = z
