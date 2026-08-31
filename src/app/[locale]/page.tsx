@@ -810,6 +810,10 @@ export default async function LocalizedHomePage({
         <section className={styles.trustSection}>
           <h2>{labels.trust}</h2>
           <nav aria-label={labels.trust}>
+            <Link href={`/${locale}/trust`}>
+              {locale === "en" ? "Full Trust Center" : "完整信任中心"}{" "}
+              <span aria-hidden="true">→</span>
+            </Link>
             {[
               [
                 "Editorial Policy",

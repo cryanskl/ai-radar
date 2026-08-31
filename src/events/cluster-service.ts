@@ -285,9 +285,10 @@ export const mergeEvents = async (input: EventMergeRequest) =>
         sourceItemId,
       })),
     );
+    const mergedAt = new Date();
     await transaction
       .update(eventSources)
-      .set({ eventId: target.id, isPrimary: false })
+      .set({ eventId: target.id, isPrimary: false, createdAt: mergedAt })
       .where(eq(eventSources.eventId, source.id));
     await transaction
       .update(eventSources)
@@ -335,7 +336,6 @@ export const mergeEvents = async (input: EventMergeRequest) =>
         .set({ targetEventId: target.id })
         .where(eq(corrections.targetEventId, source.id));
     }
-    const mergedAt = new Date();
     await transaction
       .update(events)
       .set({
@@ -593,9 +593,14 @@ export const splitMergedEvent = async (input: EventSplitRequest) =>
     const targetRepresentative = selectRepresentativeSource(
       publicRemainingTargetLinks,
     );
+    const splitAt = new Date();
     await transaction
       .update(eventSources)
-      .set({ eventId: source.id, isPrimary: false })
+      .set({
+        eventId: source.id,
+        isPrimary: false,
+        createdAt: splitAt,
+      })
       .where(
         inArray(
           eventSources.sourceItemId,
@@ -653,7 +658,6 @@ export const splitMergedEvent = async (input: EventSplitRequest) =>
           ),
         );
     }
-    const splitAt = new Date();
     await transaction
       .update(events)
       .set({
@@ -662,6 +666,10 @@ export const splitMergedEvent = async (input: EventSplitRequest) =>
         updatedAt: splitAt,
       })
       .where(eq(events.id, source.id));
+    await transaction
+      .update(events)
+      .set({ updatedAt: splitAt })
+      .where(eq(events.id, target.id));
     await transaction
       .update(localizedContents)
       .set({ publicVisibility: true, updatedAt: splitAt })

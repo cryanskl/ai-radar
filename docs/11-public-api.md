@@ -24,6 +24,8 @@ Every public response also includes `X-AI-Radar-Data-Version`. Collection respon
 
 Records expose stable public identities. Rights Status, provenance and verification timestamps are included where the underlying domain record supports them. A missing provenance field must not be interpreted as AI Radar claiming ownership of third-party material.
 
+Each Data Release detail lists five immutable JSON files with byte size and SHA-256. `GET /api/v1/releases/{publicId}/files/{name}` returns the exact stored bytes. GitHub Release is canonical; a Feishu or Baidu mirror appears in the detail only after all five checksums match. The operational publication and verification sequence is documented in `12-public-data-releases.md`.
+
 Relation records explicitly expose subject-to-object direction, validity range, confidence, review status and fact verification timestamps. Evidence objects separately expose `rightsStatus`, `attribution`, `licenseUrl` and `rightsCheckedAt`; a Rights review timestamp must not be interpreted as fact verification.
 
 ## Bounded pagination
@@ -76,5 +78,7 @@ A Relation is public only when the Relation, its endpoints and at least one Evid
 ## 中文摘要
 
 Public API 面向外部开发者，只提供只读、经过版权与公开性过滤的数据。`/api/v1` 表示接口主版本，`X-AI-Radar-Data-Version` 表示本次响应使用的数据版本。列表每页默认 20 条、最多 50 条，游标绑定语言和过滤条件，不能跨请求复用。
+
+每个数据发行版详情列出五个不可变 JSON 文件、字节数与 SHA-256。生成后的草稿不会进入公开接口；服务端下载并验证 GitHub Release 的五个资产后才公开。飞书或百度网盘镜像也由服务端逐文件下载并校验，五个文件全部字节一致后才会出现在公开详情中。
 
 公开 GET 接口默认按每个 Web runtime、每个匿名身份每 60 秒 60 次限流。部署代理必须覆盖客户端伪造的转发 IP 头。AI Radar 自有结构化数据采用 CC BY 4.0；单条记录的版权、许可和署名字段优先，接口许可不会重新授权第三方原始内容。

@@ -42,8 +42,12 @@ Open these public routes:
 - Status API: <http://localhost:3000/api/v1/status>
 - Published Events API: <http://localhost:3000/api/v1/events?locale=en>
 - OpenAPI 3.1: <http://localhost:3000/api/openapi.json>
+- English Trust Center and Open Data: <http://localhost:3000/en/trust>
+- 中文信任中心与开放数据: <http://localhost:3000/zh/trust>
 
 External developers can start with the [Public API guide](docs/11-public-api.md) for versioning, bounded cursors, rate limits and data-rights boundaries.
+
+The staged Owner sequence for generated artifacts, server-verified canonical GitHub publication and byte-verified Feishu/Baidu mirrors is documented in the [Public Data Release runbook](docs/12-public-data-releases.md).
 
 ## GitHub Owner authentication
 

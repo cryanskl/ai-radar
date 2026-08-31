@@ -168,6 +168,9 @@ export const eventSources = pgTable(
       .notNull()
       .references(() => sourceItems.id, { onDelete: "restrict" }),
     isPrimary: boolean("is_primary").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (eventSource) => [
     primaryKey({ columns: [eventSource.eventId, eventSource.sourceItemId] }),

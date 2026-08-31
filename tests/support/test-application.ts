@@ -16,6 +16,7 @@ export type TestApplication = {
 };
 
 type TestApplicationOptions = {
+  dataReleaseRemoteOrigin?: string;
   publicApi?: {
     dataVersion: string;
     rateLimitRequests: number;
@@ -110,6 +111,9 @@ export const startTestApplication = async (
           OWNER_GITHUB_ID: "34471145",
           ASK_LLM_PROVIDER: "fake",
           EMAIL_PROVIDER: "fake",
+          AI_RADAR_TEST_MODE: "true",
+          DATA_RELEASE_REMOTE_TEST_ORIGIN:
+            options.dataReleaseRemoteOrigin ?? "",
           PUBLIC_ORIGIN: url,
           EMAIL_TOKEN_SECRET:
             "test-email-token-secret-with-at-least-32-characters",

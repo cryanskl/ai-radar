@@ -144,6 +144,14 @@ import {
   publishedDailyBriefSchema,
 } from "@/daily-briefs/contracts";
 import {
+  dataReleaseCreateRequestSchema,
+  dataReleasePublishResponseSchema,
+  dataReleaseMirrorRequestSchema,
+  dataReleaseMirrorResponseSchema,
+  generatedDataReleaseSchema,
+  publicDataReleaseDetailSchema,
+} from "@/data-releases/contracts";
+import {
   publicApiErrorResponseSchema,
   publicCorrectionListSchema,
   publicEntityListSchema,
@@ -383,8 +391,17 @@ const publicRelationList = z.toJSONSchema(publicRelationListSchema);
 const publicCorrectionList = z.toJSONSchema(publicCorrectionListSchema);
 const publicTombstone = z.toJSONSchema(publicTombstoneSchema);
 const publicTombstoneList = z.toJSONSchema(publicTombstoneListSchema);
-const publicRelease = z.toJSONSchema(publicReleaseSchema);
 const publicReleaseList = z.toJSONSchema(publicReleaseListSchema);
+const publicDataReleaseDetail = z.toJSONSchema(publicDataReleaseDetailSchema);
+const dataReleaseCreateRequest = z.toJSONSchema(dataReleaseCreateRequestSchema);
+const generatedDataRelease = z.toJSONSchema(generatedDataReleaseSchema);
+const dataReleasePublishResponse = z.toJSONSchema(
+  dataReleasePublishResponseSchema,
+);
+const dataReleaseMirrorRequest = z.toJSONSchema(dataReleaseMirrorRequestSchema);
+const dataReleaseMirrorResponse = z.toJSONSchema(
+  dataReleaseMirrorResponseSchema,
+);
 const versionedPublicEventList = z.toJSONSchema(versionedPublicEventListSchema);
 const versionedSearchResponse = z.toJSONSchema(versionedSearchResponseSchema);
 const versionedPublicRankingList = z.toJSONSchema(
@@ -646,6 +663,46 @@ const publicRankingListExample = versionedPublicRankingListSchema.parse({
   definitions: [publicRankingDefinitionExample],
   featured: [],
 });
+const publicReleaseFilesExample = [
+  ["schema.json", null, "1".repeat(64)],
+  ["records.json", 2, "2".repeat(64)],
+  ["corrections.json", 1, "3".repeat(64)],
+  ["tombstones.json", 1, "4".repeat(64)],
+  ["manifest.json", null, "5".repeat(64)],
+].map(([name, recordCount, checksumSha256]) => ({
+  name,
+  mediaType: "application/json",
+  byteSize: 512,
+  recordCount,
+  checksumSha256,
+  downloadUrl: `/api/v1/releases/data-release-public-alpha-1/files/${name}`,
+}));
+const publicReleaseDetailExample = publicDataReleaseDetailSchema.parse({
+  publicId: "data-release-public-alpha-1",
+  dataVersion: "public-alpha-release-1",
+  schemaVersion: "1.0.0",
+  dataCutoff: "2026-08-31T12:00:00.000Z",
+  publishedAt: "2026-08-31T12:05:00.000Z",
+  canonicalUrl:
+    "https://github.com/cryanskl/ai-radar/releases/tag/data-public-alpha-1",
+  checksumSha256: "5".repeat(64),
+  license: "CC-BY-4.0",
+  attribution: "AI Radar and the named source publishers",
+  lastVerifiedAt: "2026-08-31T12:05:00.000Z",
+  files: publicReleaseFilesExample,
+  mirror: null,
+});
+const publicReleaseExample = publicReleaseSchema.parse({
+  publicId: publicReleaseDetailExample.publicId,
+  dataVersion: publicReleaseDetailExample.dataVersion,
+  dataCutoff: publicReleaseDetailExample.dataCutoff,
+  publishedAt: publicReleaseDetailExample.publishedAt,
+  canonicalUrl: publicReleaseDetailExample.canonicalUrl,
+  checksumSha256: publicReleaseDetailExample.checksumSha256,
+  license: publicReleaseDetailExample.license,
+  attribution: publicReleaseDetailExample.attribution,
+  lastVerifiedAt: publicReleaseDetailExample.lastVerifiedAt,
+});
 const publicStatusExample = statusResponseSchema.parse({
   status: "ok",
   services: { application: "ok", database: "ok" },
@@ -805,6 +862,146 @@ export const openApiDocument = {
     },
   },
   paths: {
+    "/api/v1/admin/data-releases": {
+      post: {
+        summary: "Generate and validate one immutable Data Release draft",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: dataReleaseCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "The rights-cleared snapshot and five immutable files were generated but are not public yet.",
+            content: {
+              "application/json": {
+                schema: generatedDataRelease,
+              },
+            },
+          },
+          400: {
+            description: "The request is invalid.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+          401: {
+            description: "An authenticated Owner session is required.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+          409: {
+            description:
+              "The version exists or a Rights, provenance, localization, cutoff or privacy gate failed.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/admin/data-releases/{publicId}/publish": {
+      post: {
+        summary:
+          "Verify all canonical GitHub assets and publish a Data Release",
+        security: [{ ownerSession: [] }],
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "The GitHub Release exists and all five downloaded assets match the immutable checksums.",
+            content: {
+              "application/json": { schema: dataReleasePublishResponse },
+            },
+          },
+          401: {
+            description: "An authenticated Owner session is required.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+          404: publicApiError("The generated Data Release does not exist."),
+          409: {
+            description:
+              "The canonical GitHub Release or one of its assets is missing or checksum-mismatched.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+          502: {
+            description: "The canonical GitHub endpoint could not be read.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/admin/data-releases/{publicId}/mirror": {
+      post: {
+        summary:
+          "Download, verify and advertise one byte-identical domestic mirror",
+        security: [{ ownerSession: [] }],
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: dataReleaseMirrorRequest },
+          },
+        },
+        responses: {
+          200: {
+            description: "Every mirrored file matches the canonical checksum.",
+            content: {
+              "application/json": { schema: dataReleaseMirrorResponse },
+            },
+          },
+          400: {
+            description: "The request is invalid.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+          401: {
+            description: "An authenticated Owner session is required.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+          404: publicApiError("The Public Data Release does not exist."),
+          409: {
+            description: "At least one mirrored file checksum differs.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+          502: {
+            description: "A mirror file could not be downloaded.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+        },
+      },
+    },
     "/api/v1/admin/daily-briefs": {
       post: {
         summary: "Create a reviewed, ordered Daily Brief draft",
@@ -3245,14 +3442,14 @@ export const openApiDocument = {
         responses: {
           200: {
             description:
-              "A bounded page of canonical release metadata. Empty until the first verified release.",
+              "A bounded page of canonical immutable release metadata.",
             headers: publicApiResponseHeaders,
             content: {
               "application/json": {
                 schema: publicReleaseList,
                 example: {
                   dataVersion: "public-alpha-unreleased",
-                  items: [],
+                  items: [publicReleaseExample],
                   nextCursor: null,
                 },
               },
@@ -3407,9 +3604,14 @@ export const openApiDocument = {
         responses: {
           200: {
             description:
-              "Canonical release metadata, checksum, license and attribution.",
+              "Canonical release metadata, file checksums, license, attribution and verified mirror state.",
             headers: publicApiResponseHeaders,
-            content: { "application/json": { schema: publicRelease } },
+            content: {
+              "application/json": {
+                schema: publicDataReleaseDetail,
+                example: publicReleaseDetailExample,
+              },
+            },
           },
           404: {
             description: "The Public Data Release does not exist.",
@@ -3417,6 +3619,64 @@ export const openApiDocument = {
               "application/json": { schema: publicApiErrorResponse },
             },
           },
+          429: publicApiRateLimitResponse,
+        },
+      },
+    },
+    "/api/v1/releases/{publicId}/files/{name}": {
+      get: {
+        summary: "Download one immutable Data Release file",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "name",
+            in: "path",
+            required: true,
+            schema: {
+              type: "string",
+              enum: [
+                "schema.json",
+                "records.json",
+                "corrections.json",
+                "tombstones.json",
+                "manifest.json",
+              ],
+            },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "Exact stored bytes with Content-Digest and X-Checksum-SHA256 headers.",
+            headers: {
+              ...publicApiResponseHeaders,
+              "Content-Digest": {
+                description: "RFC 9530 SHA-256 digest of the response bytes.",
+                schema: { type: "string" },
+              },
+              "X-Checksum-SHA256": {
+                description:
+                  "Lowercase hexadecimal SHA-256 of the response bytes.",
+                schema: { type: "string", pattern: "^[a-f0-9]{64}$" },
+              },
+            },
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    { type: "object" },
+                    { type: "array", items: { type: "object" } },
+                  ],
+                },
+              },
+            },
+          },
+          404: publicApiError("The Data Release file does not exist."),
           429: publicApiRateLimitResponse,
         },
       },

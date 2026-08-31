@@ -191,6 +191,9 @@ export const correctionChanges = pgTable(
     field: text("field").notNull(),
     previousValue: text("previous_value").notNull(),
     correctedValue: text("corrected_value").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (change) => [primaryKey({ columns: [change.correctionId, change.field] })],
 );
@@ -204,6 +207,9 @@ export const correctionEvidence = pgTable(
     sourceItemId: uuid("source_item_id")
       .notNull()
       .references(() => sourceItems.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (evidence) => [
     primaryKey({ columns: [evidence.correctionId, evidence.sourceItemId] }),

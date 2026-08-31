@@ -430,6 +430,66 @@ test("Owner retrieves, merges and splits evidenced Event clusters without losing
     targetEventPublicId: "event-price-official",
   });
 
+  const cutoffClient = new Client({
+    connectionString: application.databaseUrl,
+  });
+  await cutoffClient.connect();
+  const splitTiming = await cutoffClient.query<{
+    merged_at: Date;
+    split_at: Date;
+    restored_link_created_at: Date;
+    target_updated_at: Date;
+  }>(`
+    select merge.merged_at, merge.split_at,
+      restored_link.created_at as restored_link_created_at,
+      target.updated_at as target_updated_at
+    from event_merges merge
+    join events source on source.id = merge.source_event_id
+    join events target on target.id = merge.target_event_id
+    join event_sources restored_link on restored_link.event_id = source.id
+    where source.public_id = 'event-price-wire'
+      and target.public_id = 'event-price-official'
+    order by merge.merged_at desc
+    limit 1
+  `);
+  await cutoffClient.end();
+  const timing = splitTiming.rows[0];
+  expect(timing.restored_link_created_at).toEqual(timing.split_at);
+  expect(timing.target_updated_at).toEqual(timing.split_at);
+  const historicalCutoff = new Date(
+    (timing.merged_at.getTime() + timing.split_at.getTime()) / 2,
+  ).toISOString();
+  const historicalRelease = await context.request.post(
+    `${applicationUrl}/api/v1/admin/data-releases`,
+    {
+      data: {
+        publicId: "data-release-cluster-history-check",
+        dataVersion: "public-cluster-history-check",
+        dataCutoff: historicalCutoff,
+        canonicalUrl:
+          "https://github.com/cryanskl/ai-radar/releases/tag/cluster-history-check",
+        license: "CC-BY-4.0",
+        attribution: "AI Radar and the named source publishers",
+      },
+    },
+  );
+  expect(historicalRelease.status()).toBe(409);
+  expect(await historicalRelease.json()).toMatchObject({
+    error: "validation_failed",
+    issues: expect.arrayContaining([
+      {
+        code: "record_after_data_cutoff",
+        recordType: "event",
+        publicId: "event-price-official",
+      },
+      {
+        code: "record_after_data_cutoff",
+        recordType: "event",
+        publicId: "event-price-wire",
+      },
+    ]),
+  });
+
   for (const { eventPublicId, sourceItemPublicId, relationPublicId } of [
     {
       eventPublicId: "event-price-official",
