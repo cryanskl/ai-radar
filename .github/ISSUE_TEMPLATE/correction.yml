@@ -1,0 +1,24 @@
+name: Correction request
+description: Report a factual, translation, attribution or freshness problem
+title: "[Correction]: "
+labels: ["correction"]
+body:
+  - type: input
+    id: record-url
+    attributes:
+      label: AI Radar record URL or public ID
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What should be corrected?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Public evidence
+      description: Provide canonical sources and explain what they establish. Do not submit private personal data.
+    validations:
+      required: true

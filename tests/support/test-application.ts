@@ -1,6 +1,9 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   PostgreSqlContainer,
   type StartedPostgreSqlContainer,
@@ -12,6 +15,10 @@ export type TestApplication = {
   url: string;
   databaseUrl: string;
   restartWithUnreachableDatabase: () => Promise<void>;
+  restoreDatabaseBackup: () => Promise<{
+    databaseUrl: string;
+    stop: () => Promise<void>;
+  }>;
   stop: () => Promise<void>;
 };
 
@@ -66,12 +73,9 @@ const waitForHttp = async (url: string, child: ChildProcess) => {
 export const startTestApplication = async (
   options: TestApplicationOptions = {},
 ): Promise<TestApplication> => {
-  const databaseHostPort = await getAvailablePort();
   const database: StartedPostgreSqlContainer = await new PostgreSqlContainer(
     "postgres:17-alpine",
-  )
-    .withExposedPorts({ container: 5432, host: databaseHostPort })
-    .start();
+  ).start();
   const databaseUrl = database.getConnectionUri();
   const migration = spawnSync("pnpm", ["db:migrate"], {
     cwd: process.cwd(),
@@ -138,6 +142,77 @@ export const startTestApplication = async (
   return {
     url,
     databaseUrl,
+    restoreDatabaseBackup: async () => {
+      const temporaryDirectory = await mkdtemp(
+        join(tmpdir(), "ai-radar-recovery-"),
+      );
+      const backupPath = join(temporaryDirectory, "database.dump");
+      const containerBackupPath = "/tmp/ai-radar-database.dump";
+      let restored: StartedPostgreSqlContainer | undefined;
+      try {
+        const dump = await database.exec([
+          "pg_dump",
+          "--username=test",
+          "--dbname=test",
+          "--format=custom",
+          `--file=${containerBackupPath}`,
+        ]);
+        if (dump.exitCode !== 0) {
+          throw new Error(`PostgreSQL backup failed: ${dump.stderr}`);
+        }
+
+        const copyFromSource = spawnSync(
+          "docker",
+          ["cp", `${database.getId()}:${containerBackupPath}`, backupPath],
+          { encoding: "utf8" },
+        );
+        if (copyFromSource.status !== 0) {
+          throw new Error(
+            `Could not copy PostgreSQL backup: ${copyFromSource.stderr}`,
+          );
+        }
+
+        restored = await new PostgreSqlContainer("postgres:17-alpine")
+          .withUsername("test")
+          .withPassword("test")
+          .withDatabase("test")
+          .withStartupTimeout(30_000)
+          .start();
+        const copyToTarget = spawnSync(
+          "docker",
+          ["cp", backupPath, `${restored.getId()}:${containerBackupPath}`],
+          { encoding: "utf8" },
+        );
+        if (copyToTarget.status !== 0) {
+          throw new Error(
+            `Could not stage PostgreSQL backup: ${copyToTarget.stderr}`,
+          );
+        }
+        const restore = await restored.exec([
+          "pg_restore",
+          "--username=test",
+          "--dbname=test",
+          "--clean",
+          "--if-exists",
+          containerBackupPath,
+        ]);
+        if (restore.exitCode !== 0) {
+          throw new Error(`PostgreSQL restore failed: ${restore.stderr}`);
+        }
+        const restoredDatabase = restored;
+        return {
+          databaseUrl: restoredDatabase.getConnectionUri(),
+          stop: async () => {
+            await restoredDatabase.stop();
+          },
+        };
+      } catch (error) {
+        if (restored) await restored.stop();
+        throw error;
+      } finally {
+        await rm(temporaryDirectory, { recursive: true });
+      }
+    },
     restartWithUnreachableDatabase: async () => {
       child.kill("SIGTERM");
       await once(child, "exit");

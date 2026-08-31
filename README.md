@@ -51,6 +51,8 @@ The staged Owner sequence for generated artifacts, server-verified canonical Git
 
 Versioned, idempotent historical theme imports and their persisted quality gates are documented in the [Historical Backfill runbook](docs/13-historical-backfills.md). The first checked-in theme covers the ChatGPT Research Preview from 2022-11-30.
 
+The current [Public Alpha release decision](docs/14-public-alpha-release-decision.md) is **No-Go** until every accepted P0 has attached evidence. Run `pnpm release:decision` for the auditable matrix; `pnpm release:go` fails closed while any release blocker remains.
+
 ## GitHub Owner authentication
 
 Create a GitHub OAuth App and set its callback URL to:
@@ -130,6 +132,6 @@ AI Radar 是一个面向全球用户的中英文双语 AI 信息雷达，聚合�
 
 ## Contributing and security
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting code, original content or a third-party link. Report vulnerabilities through [SECURITY.md](SECURITY.md), not a public Issue.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting code, original content or a third-party link. Report vulnerabilities through [SECURITY.md](SECURITY.md), not a public Issue. The [NOTICE](NOTICE) explains the boundary between the source-code license, dependencies and third-party material.
 
 Source code is licensed under the [Apache License 2.0](LICENSE). Data and third-party material have separate rights and release boundaries documented under `docs/05-sources-rights-and-open-data.md`.

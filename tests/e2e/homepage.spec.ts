@@ -549,6 +549,18 @@ test("composes the bilingual homepage from published Event and Featured records"
   await page.setViewportSize({ width: 1536, height: 1024 });
   await page.reload();
   await expect(page).toHaveTitle(/AI Radar/);
+  const alphaNotice = page.locator('[data-component="alpha-notice"]');
+  await expect(alphaNotice).toContainText("Public Alpha");
+  await expect(alphaNotice).toContainText(
+    "The open, bilingual map of global AI.",
+  );
+  await expect(alphaNotice).toContainText(
+    "English and Chinese sources; global Events",
+  );
+  await expect(alphaNotice).toContainText("Data cutoff");
+  await expect(
+    alphaNotice.getByRole("link", { name: "Coverage and known limitations" }),
+  ).toHaveAttribute("href", "/en/trust");
   await expect(
     page.getByRole("navigation", { name: "Primary navigation" }),
   ).toContainText("RadarModelsPapersProductsGitHubPromptsSkillsGuides");
@@ -612,6 +624,17 @@ test("composes the bilingual homepage from published Event and Featured records"
   );
 
   await page.goto(`${application.url}/zh`);
+  const chineseAlphaNotice = page.locator('[data-component="alpha-notice"]');
+  await expect(chineseAlphaNotice).toContainText("公开测试版");
+  await expect(chineseAlphaNotice).toContainText(
+    "开放、双语、全景的全球 AI 信息雷达。",
+  );
+  await expect(chineseAlphaNotice).toContainText(
+    "以中英文来源为主，事件面向全球",
+  );
+  await expect(
+    chineseAlphaNotice.getByRole("link", { name: "覆盖范围与已知限制" }),
+  ).toHaveAttribute("href", "/zh/trust");
   await expect(page.getByRole("heading", { name: "今日简报" })).toBeVisible();
   await expect(page.locator('[data-component="featured-card"]')).toContainText(
     "有一手证据且明确到版本的重要发布。",

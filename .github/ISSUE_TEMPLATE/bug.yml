@@ -1,0 +1,32 @@
+name: Bug report
+description: Report a reproducible problem in the AI Radar code or public site
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include secrets, personal data or private vulnerability details. Use the private Security entry for vulnerabilities.
+  - type: textarea
+    id: observed
+    attributes:
+      label: What happened?
+      description: Include the affected URL or command and the behavior you observed.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: Commit SHA, Data Version or Public Alpha page cutoff

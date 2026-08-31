@@ -44,6 +44,7 @@ AI Radar 是面向全球 AI 深度用户的中英双语信息雷达。它把实�
 8. [编辑运营](./08-editorial-operations.md)
 9. [六周路线图](./09-six-week-roadmap.md)
 10. [验收清单](./10-acceptance-checklist.md)
+11. [Public Alpha 发布决策](./14-public-alpha-release-decision.md)
 
 ## 已确认的核心决策
 
@@ -118,4 +119,3 @@ AI Radar 是面向全球 AI 深度用户的中英双语信息雷达。它把实�
 - 新增内容字段时，先更新内容模型，再更新 API、开放数据和验收。
 - 修改排行榜时，必须同步更新方法说明和面向用户的解释。
 - 更改权利策略时，必须同步检查已有开放数据快照。
-

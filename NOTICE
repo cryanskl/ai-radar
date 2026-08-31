@@ -1,0 +1,14 @@
+AI Radar
+Copyright 2026 AI Radar contributors
+
+The AI Radar source code is licensed under the Apache License, Version 2.0.
+See LICENSE for the complete terms.
+
+Third-party source material, linked works, metadata, names, trademarks and
+repository dependencies remain subject to their respective rights and licenses.
+A code contribution or an AI Radar data record does not relicense third-party
+expression. Public data exports therefore include record-level rights and
+attribution fields and exclude material that AI Radar is not entitled to release.
+
+The dependency license audit for this Public Alpha release candidate is recorded
+in docs/release-evidence/dependency-license-audit.md.

@@ -1,0 +1,31 @@
+name: Rights or privacy request
+description: Request attribution, licensing, privacy or takedown review
+title: "[Rights]: "
+labels: ["rights-review"]
+body:
+  - type: markdown
+    attributes:
+      value: Do not publish sensitive personal data, credentials or security vulnerabilities in this form. Use the private Security entry for vulnerabilities.
+  - type: input
+    id: record-url
+    attributes:
+      label: Affected AI Radar record or source URL
+    validations:
+      required: true
+  - type: dropdown
+    id: request-type
+    attributes:
+      label: Request type
+      options:
+        - Attribution
+        - License or reuse
+        - Privacy
+        - Takedown
+    validations:
+      required: true
+  - type: textarea
+    id: basis
+    attributes:
+      label: Request and supporting basis
+    validations:
+      required: true

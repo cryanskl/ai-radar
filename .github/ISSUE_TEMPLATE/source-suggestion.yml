@@ -1,0 +1,29 @@
+name: Source suggestion
+description: Suggest a public AI information source for editorial review
+title: "[Source]: "
+labels: ["source-suggestion"]
+body:
+  - type: input
+    id: canonical-url
+    attributes:
+      label: Canonical source URL
+      description: Link to the publisher, project or official feed. Do not paste the source's full text.
+    validations:
+      required: true
+  - type: input
+    id: publisher
+    attributes:
+      label: Publisher or maintainer
+    validations:
+      required: true
+  - type: textarea
+    id: value
+    attributes:
+      label: Why should AI Radar track it?
+    validations:
+      required: true
+  - type: textarea
+    id: rights
+    attributes:
+      label: Known access, license or attribution terms
+      description: Link to the applicable terms when known. A public URL alone grants no reuse rights.

@@ -11,6 +11,10 @@ const copy = {
   en: {
     primaryNavigation: "Primary navigation",
     utilityNavigation: "Utility navigation",
+    alphaLabel: "Public Alpha",
+    alphaTagline: "The open, bilingual map of global AI.",
+    alphaCoverage: "English and Chinese sources; global Events",
+    alphaLimitations: "Coverage and known limitations",
     search: "Search",
     ask: "Ask AI Radar",
     placeholder: "Search models, papers, repos, products…",
@@ -57,6 +61,10 @@ const copy = {
   zh: {
     primaryNavigation: "主导航",
     utilityNavigation: "工具导航",
+    alphaLabel: "公开测试版",
+    alphaTagline: "开放、双语、全景的全球 AI 信息雷达。",
+    alphaCoverage: "以中英文来源为主，事件面向全球",
+    alphaLimitations: "覆盖范围与已知限制",
     search: "搜索",
     ask: "询问 AI Radar",
     placeholder: "搜索模型、论文、仓库、产品……",
@@ -209,6 +217,28 @@ export default async function LocalizedHomePage({
       </header>
 
       <main className={styles.main}>
+        <section
+          aria-label={labels.alphaLabel}
+          className={styles.alphaNotice}
+          data-component="alpha-notice"
+        >
+          <div>
+            <strong>{labels.alphaLabel}</strong>
+            <p>{labels.alphaTagline}</p>
+          </div>
+          <dl>
+            <div>
+              <dt>{locale === "en" ? "Coverage" : "覆盖范围"}</dt>
+              <dd>{labels.alphaCoverage}</dd>
+            </div>
+            <div>
+              <dt>{labels.cutoff}</dt>
+              <dd>{dataCutoff ?? "—"}</dd>
+            </div>
+          </dl>
+          <Link href={`/${locale}/trust`}>{labels.alphaLimitations} →</Link>
+        </section>
+
         <search className={styles.search}>
           <div className={styles.searchModes}>
             <span aria-current="page">{labels.search}</span>
