@@ -1,0 +1,261 @@
+{
+  "batch": {
+    "publicId": "historical-batch-chatgpt-research-preview-v1",
+    "themeSlug": "chatgpt-research-preview",
+    "version": "1.0.0",
+    "name": {
+      "en": "ChatGPT Research Preview",
+      "zh": "ChatGPT 研究预览版"
+    },
+    "timelineStart": "2022-11-30T00:00:00.000Z",
+    "coverageEnd": "2022-11-30T23:59:59.999Z",
+    "prehistoryPolicy": "curated_prehistory"
+  },
+  "candidates": [
+    {
+      "publicId": "history-candidate-entity-chatgpt",
+      "kind": "entity",
+      "input": {
+        "entity": {
+          "publicId": "product-chatgpt",
+          "type": "product",
+          "officialName": "ChatGPT",
+          "officialUrl": "https://chatgpt.com/",
+          "lastVerifiedAt": "2026-08-31T00:00:00.000Z",
+          "rightsStatus": "link_only"
+        },
+        "localizations": [
+          {
+            "locale": "en",
+            "name": "ChatGPT",
+            "summary": "OpenAI's conversational AI product, first released publicly as a research preview on November 30, 2022.",
+            "authorship": "human_authored",
+            "reviewStatus": "reviewed"
+          },
+          {
+            "locale": "zh",
+            "name": "ChatGPT",
+            "summary": "OpenAI 的对话式 AI 产品，于 2022 年 11 月 30 日首次以研究预览版形式公开发布。",
+            "authorship": "human_authored",
+            "reviewStatus": "reviewed"
+          }
+        ],
+        "aliases": [
+          {
+            "publicId": "alias-product-chatgpt-official",
+            "locale": "en",
+            "kind": "official",
+            "value": "ChatGPT"
+          }
+        ],
+        "versions": [
+          {
+            "publicId": "version-chatgpt-research-preview-2022-11-30",
+            "versionLabel": "Research Preview",
+            "releasedAt": "2022-11-30T00:00:00.000Z",
+            "releasedAtPrecision": "day"
+          }
+        ]
+      }
+    },
+    {
+      "publicId": "history-candidate-entity-openai",
+      "kind": "entity",
+      "input": {
+        "entity": {
+          "publicId": "organization-openai",
+          "type": "organization",
+          "officialName": "OpenAI",
+          "officialUrl": "https://openai.com/",
+          "lastVerifiedAt": "2026-08-31T00:00:00.000Z",
+          "rightsStatus": "link_only"
+        },
+        "localizations": [
+          {
+            "locale": "en",
+            "name": "OpenAI",
+            "summary": "The organization that published the ChatGPT research preview.",
+            "authorship": "human_authored",
+            "reviewStatus": "reviewed"
+          },
+          {
+            "locale": "zh",
+            "name": "OpenAI",
+            "summary": "发布 ChatGPT 研究预览版的组织。",
+            "authorship": "human_authored",
+            "reviewStatus": "reviewed"
+          }
+        ],
+        "aliases": [],
+        "versions": []
+      }
+    },
+    {
+      "publicId": "history-candidate-entity-conversational-ai",
+      "kind": "entity",
+      "input": {
+        "entity": {
+          "publicId": "topic-conversational-ai",
+          "type": "topic",
+          "officialName": "Conversational AI",
+          "officialUrl": "https://openai.com/index/chatgpt/",
+          "lastVerifiedAt": "2026-08-31T00:00:00.000Z",
+          "rightsStatus": "link_only"
+        },
+        "localizations": [
+          {
+            "locale": "en",
+            "name": "Conversational AI",
+            "summary": "AI systems designed for dialogue-based interaction.",
+            "authorship": "human_authored",
+            "reviewStatus": "reviewed"
+          },
+          {
+            "locale": "zh",
+            "name": "对话式 AI",
+            "summary": "面向对话交互设计的人工智能系统。",
+            "authorship": "human_authored",
+            "reviewStatus": "reviewed"
+          }
+        ],
+        "aliases": [],
+        "versions": []
+      }
+    },
+    {
+      "publicId": "history-candidate-event-chatgpt-launch",
+      "kind": "event",
+      "input": {
+        "source": {
+          "publicId": "source-openai",
+          "name": "OpenAI",
+          "homepageUrl": "https://openai.com/",
+          "tier": "S",
+          "accessStatus": "approved",
+          "acquisitionMethod": "manual",
+          "policyLastReviewedAt": "2026-08-31T00:00:00.000Z"
+        },
+        "sourceItem": {
+          "publicId": "source-item-openai-chatgpt-research-preview-2022-11-30",
+          "externalId": "openai-chatgpt-2022-11-30",
+          "externalIdVerifiedAt": "2026-08-31T00:00:00.000Z",
+          "isOriginalSource": true,
+          "originalUrl": "https://openai.com/index/chatgpt/",
+          "canonicalUrl": "https://openai.com/index/chatgpt/",
+          "originalTitle": "Introducing ChatGPT",
+          "originalLanguage": "en",
+          "publishedAt": "2022-11-30T00:00:00.000Z",
+          "publishedAtPrecision": "day",
+          "discoveredAt": "2026-08-31T00:00:00.000Z",
+          "rightsStatus": "link_only",
+          "rightsCheckedAt": "2026-08-31T00:00:00.000Z",
+          "attribution": "OpenAI",
+          "licenseUrl": null
+        },
+        "event": {
+          "publicId": "event-chatgpt-research-preview-2022-11-30",
+          "eventType": "announces",
+          "factStatus": "confirmed",
+          "occurredAt": "2022-11-30T00:00:00.000Z",
+          "occurredAtPrecision": "day",
+          "lastVerifiedAt": "2026-08-31T00:00:00.000Z",
+          "rightsStatus": "link_only"
+        },
+        "localizations": [
+          {
+            "locale": "en",
+            "title": "OpenAI releases ChatGPT as a research preview",
+            "summary": "OpenAI publicly introduced ChatGPT on November 30, 2022 to gather feedback on the conversational system's capabilities and limitations.",
+            "authorship": "human_authored",
+            "reviewStatus": "reviewed"
+          },
+          {
+            "locale": "zh",
+            "title": "OpenAI 以研究预览版形式发布 ChatGPT",
+            "summary": "OpenAI 于 2022 年 11 月 30 日公开推出 ChatGPT，以收集用户对该对话系统能力与局限的反馈。",
+            "authorship": "human_authored",
+            "reviewStatus": "reviewed"
+          }
+        ]
+      }
+    },
+    {
+      "publicId": "history-candidate-relation-chatgpt-announcement",
+      "kind": "relation",
+      "input": {
+        "relation": {
+          "publicId": "relation-chatgpt-preview-announces-product",
+          "subject": {
+            "type": "event",
+            "publicId": "event-chatgpt-research-preview-2022-11-30"
+          },
+          "predicate": "ANNOUNCES",
+          "objectEntityPublicId": "product-chatgpt",
+          "validFrom": "2022-11-30T00:00:00.000Z",
+          "validTo": null,
+          "firstVerifiedAt": "2026-08-31T00:00:00.000Z",
+          "lastVerifiedAt": "2026-08-31T00:00:00.000Z",
+          "confidence": 100,
+          "reviewStatus": "reviewed",
+          "creationMethod": "editor",
+          "rightsStatus": "link_only"
+        },
+        "evidenceSourceItemPublicIds": [
+          "source-item-openai-chatgpt-research-preview-2022-11-30"
+        ]
+      }
+    },
+    {
+      "publicId": "history-candidate-relation-openai-develops-chatgpt",
+      "kind": "relation",
+      "input": {
+        "relation": {
+          "publicId": "relation-openai-develops-chatgpt",
+          "subject": {
+            "type": "entity",
+            "publicId": "organization-openai"
+          },
+          "predicate": "DEVELOPS",
+          "objectEntityPublicId": "product-chatgpt",
+          "validFrom": "2022-11-30T00:00:00.000Z",
+          "validTo": null,
+          "firstVerifiedAt": "2026-08-31T00:00:00.000Z",
+          "lastVerifiedAt": "2026-08-31T00:00:00.000Z",
+          "confidence": 100,
+          "reviewStatus": "reviewed",
+          "creationMethod": "editor",
+          "rightsStatus": "link_only"
+        },
+        "evidenceSourceItemPublicIds": [
+          "source-item-openai-chatgpt-research-preview-2022-11-30"
+        ]
+      }
+    },
+    {
+      "publicId": "history-candidate-relation-chatgpt-topic",
+      "kind": "relation",
+      "input": {
+        "relation": {
+          "publicId": "relation-chatgpt-tagged-conversational-ai",
+          "subject": {
+            "type": "entity",
+            "publicId": "product-chatgpt"
+          },
+          "predicate": "TAGGED_WITH",
+          "objectEntityPublicId": "topic-conversational-ai",
+          "validFrom": "2022-11-30T00:00:00.000Z",
+          "validTo": null,
+          "firstVerifiedAt": "2026-08-31T00:00:00.000Z",
+          "lastVerifiedAt": "2026-08-31T00:00:00.000Z",
+          "confidence": 100,
+          "reviewStatus": "reviewed",
+          "creationMethod": "editor",
+          "rightsStatus": "link_only"
+        },
+        "evidenceSourceItemPublicIds": [
+          "source-item-openai-chatgpt-research-preview-2022-11-30"
+        ]
+      }
+    }
+  ]
+}

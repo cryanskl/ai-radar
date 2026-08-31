@@ -67,9 +67,62 @@ const initialPublicationState = (input: PublicationReadiness) => {
   return ready ? ("ready" as const) : ("verifying" as const);
 };
 
-export const createEventDraft = async (input: EventDraftRequest) => {
+type EventTransaction = Parameters<
+  Parameters<typeof database.transaction>[0]
+>[0];
+
+const insertEventDraft = async (
+  transaction: EventTransaction,
+  input: EventDraftRequest,
+  sourceId: string,
+) => {
   const publicationState = initialPublicationState(input);
-  return database.transaction(async (transaction) => {
+  const [sourceItem] = await transaction
+    .insert(sourceItems)
+    .values({
+      ...input.sourceItem,
+      externalIdVerifiedAt: input.sourceItem.externalIdVerifiedAt
+        ? new Date(input.sourceItem.externalIdVerifiedAt)
+        : null,
+      isOriginalSource: input.sourceItem.isOriginalSource ?? false,
+      sourceId,
+      publishedAt: new Date(input.sourceItem.publishedAt),
+      discoveredAt: new Date(input.sourceItem.discoveredAt),
+      rightsCheckedAt: new Date(input.sourceItem.rightsCheckedAt),
+    })
+    .returning({ id: sourceItems.id });
+  const [event] = await transaction
+    .insert(events)
+    .values({
+      ...input.event,
+      publicationState,
+      occurredAt: new Date(input.event.occurredAt),
+      discoveredAt: new Date(input.sourceItem.discoveredAt),
+      lastVerifiedAt: new Date(input.event.lastVerifiedAt),
+    })
+    .returning({ id: events.id, publicId: events.publicId });
+
+  await transaction.insert(eventSources).values({
+    eventId: event.id,
+    sourceItemId: sourceItem.id,
+    isPrimary: true,
+  });
+  await transaction.insert(localizedContents).values(
+    input.localizations.map((localization) => ({
+      ...localization,
+      eventId: event.id,
+    })),
+  );
+
+  return {
+    publicId: event.publicId,
+    publicationState,
+    locales: input.localizations.map(({ locale }) => locale),
+  };
+};
+
+export const createEventDraft = async (input: EventDraftRequest) =>
+  database.transaction(async (transaction) => {
     const [source] = await transaction
       .insert(sources)
       .values({
@@ -77,50 +130,55 @@ export const createEventDraft = async (input: EventDraftRequest) => {
         policyLastReviewedAt: new Date(input.source.policyLastReviewedAt),
       })
       .returning({ id: sources.id });
-    const [sourceItem] = await transaction
-      .insert(sourceItems)
-      .values({
-        ...input.sourceItem,
-        externalIdVerifiedAt: input.sourceItem.externalIdVerifiedAt
-          ? new Date(input.sourceItem.externalIdVerifiedAt)
-          : null,
-        isOriginalSource: input.sourceItem.isOriginalSource ?? false,
-        sourceId: source.id,
-        publishedAt: new Date(input.sourceItem.publishedAt),
-        discoveredAt: new Date(input.sourceItem.discoveredAt),
-        rightsCheckedAt: new Date(input.sourceItem.rightsCheckedAt),
-      })
-      .returning({ id: sourceItems.id });
-    const [event] = await transaction
-      .insert(events)
-      .values({
-        ...input.event,
-        publicationState,
-        occurredAt: new Date(input.event.occurredAt),
-        discoveredAt: new Date(input.sourceItem.discoveredAt),
-        lastVerifiedAt: new Date(input.event.lastVerifiedAt),
-      })
-      .returning({ id: events.id, publicId: events.publicId });
+    return insertEventDraft(transaction, input, source.id);
+  });
 
-    await transaction.insert(eventSources).values({
-      eventId: event.id,
-      sourceItemId: sourceItem.id,
-      isPrimary: true,
-    });
-    await transaction.insert(localizedContents).values(
-      input.localizations.map((localization) => ({
-        ...localization,
-        eventId: event.id,
-      })),
-    );
-
+export const createHistoricalEventDraft = async (input: EventDraftRequest) =>
+  database.transaction(async (transaction) => {
+    const [existingSource] = await transaction
+      .select({
+        id: sources.id,
+        name: sources.name,
+        homepageUrl: sources.homepageUrl,
+        tier: sources.tier,
+        accessStatus: sources.accessStatus,
+        acquisitionMethod: sources.acquisitionMethod,
+      })
+      .from(sources)
+      .where(eq(sources.publicId, input.source.publicId));
+    if (
+      existingSource &&
+      (existingSource.name !== input.source.name ||
+        existingSource.homepageUrl !== input.source.homepageUrl ||
+        existingSource.tier !== input.source.tier ||
+        existingSource.accessStatus !== input.source.accessStatus ||
+        existingSource.acquisitionMethod !== input.source.acquisitionMethod)
+    ) {
+      return { status: "source_conflict" as const };
+    }
+    const source = existingSource
+      ? existingSource
+      : (
+          await transaction
+            .insert(sources)
+            .values({
+              ...input.source,
+              policyLastReviewedAt: new Date(input.source.policyLastReviewedAt),
+            })
+            .returning({
+              id: sources.id,
+              name: sources.name,
+              homepageUrl: sources.homepageUrl,
+              tier: sources.tier,
+              accessStatus: sources.accessStatus,
+              acquisitionMethod: sources.acquisitionMethod,
+            })
+        )[0];
     return {
-      publicId: event.publicId,
-      publicationState,
-      locales: input.localizations.map(({ locale }) => locale),
+      status: "created" as const,
+      ...(await insertEventDraft(transaction, input, source.id)),
     };
   });
-};
 
 export const createEventDraftFromInbox = async (
   sourceItemPublicId: string,

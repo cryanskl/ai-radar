@@ -152,6 +152,10 @@ import {
   publicDataReleaseDetailSchema,
 } from "@/data-releases/contracts";
 import {
+  historicalBackfillReportSchema,
+  historicalBackfillRequestSchema,
+} from "@/historical-backfills/contracts";
+import {
   publicApiErrorResponseSchema,
   publicCorrectionListSchema,
   publicEntityListSchema,
@@ -395,6 +399,10 @@ const publicReleaseList = z.toJSONSchema(publicReleaseListSchema);
 const publicDataReleaseDetail = z.toJSONSchema(publicDataReleaseDetailSchema);
 const dataReleaseCreateRequest = z.toJSONSchema(dataReleaseCreateRequestSchema);
 const generatedDataRelease = z.toJSONSchema(generatedDataReleaseSchema);
+const historicalBackfillRequest = z.toJSONSchema(
+  historicalBackfillRequestSchema,
+);
+const historicalBackfillReport = z.toJSONSchema(historicalBackfillReportSchema);
 const dataReleasePublishResponse = z.toJSONSchema(
   dataReleasePublishResponseSchema,
 );
@@ -862,6 +870,87 @@ export const openApiDocument = {
     },
   },
   paths: {
+    "/api/v1/admin/historical-batches": {
+      post: {
+        summary: "Run or replay one versioned historical backfill batch",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: historicalBackfillRequest },
+          },
+        },
+        responses: {
+          200: {
+            description:
+              "An identical completed batch was replayed without creating records.",
+            content: {
+              "application/json": { schema: historicalBackfillReport },
+            },
+          },
+          201: {
+            description:
+              "The batch was imported and its quality report was persisted.",
+            content: {
+              "application/json": { schema: historicalBackfillReport },
+            },
+          },
+          400: {
+            description: "The batch manifest is invalid.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+          401: {
+            description: "An authenticated Owner session is required.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+          409: {
+            description:
+              "The batch public ID has different content or the theme/version identity already exists.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/admin/historical-batches/{publicId}": {
+      get: {
+        summary: "Read one persisted historical backfill quality report",
+        security: [{ ownerSession: [] }],
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description: "The stored batch result and candidate outcomes.",
+            content: {
+              "application/json": { schema: historicalBackfillReport },
+            },
+          },
+          401: {
+            description: "An authenticated Owner session is required.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+          404: {
+            description: "The historical batch does not exist.",
+            content: {
+              "application/json": { schema: { type: "object" } },
+            },
+          },
+        },
+      },
+    },
     "/api/v1/admin/data-releases": {
       post: {
         summary: "Generate and validate one immutable Data Release draft",

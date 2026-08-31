@@ -14,3 +14,4 @@ export * from "./guides";
 export * from "./rankings";
 export * from "./daily-briefs";
 export * from "./data-releases";
+export * from "./historical-backfills";

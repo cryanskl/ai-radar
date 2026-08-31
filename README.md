@@ -49,6 +49,8 @@ External developers can start with the [Public API guide](docs/11-public-api.md)
 
 The staged Owner sequence for generated artifacts, server-verified canonical GitHub publication and byte-verified Feishu/Baidu mirrors is documented in the [Public Data Release runbook](docs/12-public-data-releases.md).
 
+Versioned, idempotent historical theme imports and their persisted quality gates are documented in the [Historical Backfill runbook](docs/13-historical-backfills.md). The first checked-in theme covers the ChatGPT Research Preview from 2022-11-30.
+
 ## GitHub Owner authentication
 
 Create a GitHub OAuth App and set its callback URL to:
