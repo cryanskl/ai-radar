@@ -127,6 +127,13 @@
       "when": 1788122904497,
       "tag": "0017_stale_squirrel_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788135969068,
+      "tag": "0018_daffy_pandemic",
+      "breakpoints": true
     }
   ]
 }

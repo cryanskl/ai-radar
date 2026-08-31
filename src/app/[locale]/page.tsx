@@ -4,6 +4,7 @@ import { z } from "zod";
 import { localeSchema } from "@/events/contracts";
 import { displayTimestamp } from "@/events/presentation";
 import { getHomepageData, type HomepageView } from "@/homepage/service";
+import { EmailSubscriptionForm } from "./email-subscription-form";
 import styles from "./homepage.module.css";
 
 const copy = {
@@ -768,6 +769,11 @@ export default async function LocalizedHomePage({
                     ? "Follow rights-cleared public Events in your reader."
                     : "在阅读器中关注通过权利检查的公开事件。"}
                 </p>
+                <a href={`/${locale}/rss/daily.xml`}>
+                  {locale === "en"
+                    ? "Subscribe to English RSS"
+                    : "订阅中文 RSS"}
+                </a>
               </article>
               <article>
                 <h3>Email</h3>
@@ -776,6 +782,7 @@ export default async function LocalizedHomePage({
                     ? "Receive the curated bilingual Daily Brief."
                     : "接收经过策展的双语每日简报。"}
                 </p>
+                <EmailSubscriptionForm locale={locale} />
               </article>
             </div>
           </div>

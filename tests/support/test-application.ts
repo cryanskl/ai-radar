@@ -99,6 +99,10 @@ export const startTestApplication = async (): Promise<TestApplication> => {
           GITHUB_SECRET: "test-github-client-secret",
           OWNER_GITHUB_ID: "34471145",
           ASK_LLM_PROVIDER: "fake",
+          EMAIL_PROVIDER: "fake",
+          PUBLIC_ORIGIN: url,
+          EMAIL_TOKEN_SECRET:
+            "test-email-token-secret-with-at-least-32-characters",
         },
         stdio: ["ignore", "pipe", "pipe"],
       },

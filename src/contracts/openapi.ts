@@ -133,8 +133,48 @@ import {
   rankingObservationCreateRequestSchema,
   rankingObservationCreateResponseSchema,
 } from "@/rankings/contracts";
+import {
+  dailyBriefCreateRequestSchema,
+  dailyBriefDraftResponseSchema,
+  dailyBriefEmailPreviewSchema,
+  dailyBriefErrorResponseSchema,
+  dailyBriefPublishResponseSchema,
+  dailyBriefPreviewSchema,
+  emailConfirmationResponseSchema,
+  emailDeliveryListResponseSchema,
+  emailSubscriptionRequestSchema,
+  emailSubscriptionResponseSchema,
+  emailTokenRequestSchema,
+  emailUnsubscribeResponseSchema,
+  invalidDailyBriefRequestResponseSchema,
+  publishedDailyBriefSchema,
+} from "@/daily-briefs/contracts";
 
 const statusSchema = z.toJSONSchema(statusResponseSchema);
+const dailyBriefCreateRequest = z.toJSONSchema(dailyBriefCreateRequestSchema);
+const dailyBriefDraftResponse = z.toJSONSchema(dailyBriefDraftResponseSchema);
+const dailyBriefEmailPreview = z.toJSONSchema(dailyBriefEmailPreviewSchema);
+const dailyBriefErrorResponse = z.toJSONSchema(dailyBriefErrorResponseSchema);
+const dailyBriefPublishResponse = z.toJSONSchema(
+  dailyBriefPublishResponseSchema,
+);
+const dailyBriefPreview = z.toJSONSchema(dailyBriefPreviewSchema);
+const emailConfirmationResponse = z.toJSONSchema(
+  emailConfirmationResponseSchema,
+);
+const emailDeliveryListResponse = z.toJSONSchema(
+  emailDeliveryListResponseSchema,
+);
+const emailSubscriptionRequest = z.toJSONSchema(emailSubscriptionRequestSchema);
+const emailSubscriptionResponse = z.toJSONSchema(
+  emailSubscriptionResponseSchema,
+);
+const emailTokenRequest = z.toJSONSchema(emailTokenRequestSchema);
+const emailUnsubscribeResponse = z.toJSONSchema(emailUnsubscribeResponseSchema);
+const invalidDailyBriefRequestResponse = z.toJSONSchema(
+  invalidDailyBriefRequestResponseSchema,
+);
+const publishedDailyBrief = z.toJSONSchema(publishedDailyBriefSchema);
 const eventDraftRequest = z.toJSONSchema(eventDraftRequestSchema);
 const eventDraftResponse = z.toJSONSchema(eventDraftResponseSchema);
 const eventErrorResponse = z.toJSONSchema(eventErrorResponseSchema);
@@ -384,6 +424,10 @@ const rankingError = (description: string) => ({
   description,
   content: { "application/json": { schema: rankingErrorResponse } },
 });
+const dailyBriefError = (description: string) => ({
+  description,
+  content: { "application/json": { schema: dailyBriefErrorResponse } },
+});
 
 export const openApiDocument = {
   openapi: "3.1.0",
@@ -402,6 +446,253 @@ export const openApiDocument = {
     },
   },
   paths: {
+    "/api/v1/admin/daily-briefs": {
+      post: {
+        summary: "Create a reviewed, ordered Daily Brief draft",
+        security: [{ ownerSession: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: dailyBriefCreateRequest },
+          },
+        },
+        responses: {
+          201: {
+            description:
+              "A private Daily Brief draft with frozen Event snapshots was created.",
+            content: {
+              "application/json": { schema: dailyBriefDraftResponse },
+            },
+          },
+          400: {
+            description: "The request or Event references are invalid.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    dailyBriefErrorResponse,
+                    invalidDailyBriefRequestResponse,
+                  ],
+                },
+              },
+            },
+          },
+          401: dailyBriefError("An authenticated Owner session is required."),
+          409: dailyBriefError(
+            "The version already exists or an Event is newer than the Data Cutoff.",
+          ),
+        },
+      },
+    },
+    "/api/v1/admin/daily-briefs/{publicId}/preview": {
+      get: {
+        summary: "Preview one Daily Brief through a publication channel",
+        security: [{ ownerSession: [] }],
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "channel",
+            in: "query",
+            required: true,
+            schema: { type: "string", enum: ["web", "rss", "email"] },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "A Web projection, email rendering, or RSS XML rendering of the same frozen Brief.",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [dailyBriefPreview, dailyBriefEmailPreview],
+                },
+              },
+              "application/rss+xml": { schema: { type: "string" } },
+            },
+          },
+          400: dailyBriefError("The requested preview channel is invalid."),
+          401: dailyBriefError("An authenticated Owner session is required."),
+          404: dailyBriefError("The Daily Brief does not exist."),
+        },
+      },
+    },
+    "/api/v1/admin/daily-briefs/{publicId}/publish": {
+      post: {
+        summary: "Publish one reviewed Daily Brief and enqueue email delivery",
+        security: [{ ownerSession: [] }],
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description:
+              "The Brief is public and every same-locale confirmed subscription has an observable delivery result.",
+            content: {
+              "application/json": { schema: dailyBriefPublishResponse },
+            },
+          },
+          401: dailyBriefError("An authenticated Owner session is required."),
+          404: dailyBriefError("The Daily Brief does not exist."),
+          409: dailyBriefError("The Daily Brief has not completed review."),
+        },
+      },
+    },
+    "/api/v1/admin/email-deliveries": {
+      get: {
+        summary: "List identity-safe email delivery states",
+        security: [{ ownerSession: [] }],
+        responses: {
+          200: {
+            description:
+              "Provider acceptance, delivery, failure and bounce states without subscriber identity.",
+            content: {
+              "application/json": { schema: emailDeliveryListResponse },
+            },
+          },
+          401: dailyBriefError("An authenticated Owner session is required."),
+        },
+      },
+    },
+    "/api/v1/daily-briefs/{publicId}": {
+      get: {
+        summary: "Read one published Daily Brief",
+        parameters: [
+          {
+            name: "publicId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          localeParameter,
+        ],
+        responses: {
+          200: {
+            description:
+              "The ordered, frozen Daily Brief used by Web, RSS and email.",
+            content: {
+              "application/json": { schema: publishedDailyBrief },
+            },
+          },
+          400: dailyBriefError("The requested locale is invalid."),
+          404: dailyBriefError("The Daily Brief is not published."),
+        },
+      },
+    },
+    "/api/v1/email-subscriptions": {
+      post: {
+        summary: "Request an explicit double-opt-in Daily Brief subscription",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: emailSubscriptionRequest },
+          },
+        },
+        responses: {
+          202: {
+            description: "The identity-safe confirmation workflow is pending.",
+            content: {
+              "application/json": { schema: emailSubscriptionResponse },
+            },
+          },
+          400: {
+            description: "The email, locale or explicit consent is invalid.",
+            content: {
+              "application/json": {
+                schema: invalidDailyBriefRequestResponse,
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/email-subscriptions/confirm": {
+      post: {
+        summary: "Confirm a pending subscription with a signed token",
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: emailTokenRequest } },
+        },
+        responses: {
+          200: {
+            description:
+              "The subscription was confirmed or is no longer valid.",
+            content: {
+              "application/json": { schema: emailConfirmationResponse },
+            },
+          },
+          400: {
+            description: "The confirmation token does not match the contract.",
+            content: {
+              "application/json": { schema: emailConfirmationResponse },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/email-subscriptions/unsubscribe": {
+      post: {
+        summary: "Immediately unsubscribe with a signed token",
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: emailTokenRequest } },
+        },
+        responses: {
+          200: {
+            description:
+              "Always returns the same non-enumerating unsubscribe status.",
+            content: {
+              "application/json": { schema: emailUnsubscribeResponse },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/email/provider-webhook": {
+      post: {
+        summary: "Record one verified email provider delivery event",
+        parameters: [
+          {
+            name: "svix-id",
+            in: "header",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "svix-timestamp",
+            in: "header",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "svix-signature",
+            in: "header",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object" } } },
+        },
+        responses: {
+          204: { description: "The verified event was recorded idempotently." },
+          400: dailyBriefError("The webhook signature or payload is invalid."),
+          503: dailyBriefError(
+            "The verified event cannot yet be associated with a delivery and should be retried.",
+          ),
+        },
+      },
+    },
     "/api/v1/ask": {
       post: {
         summary:
